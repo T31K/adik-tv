@@ -461,6 +461,7 @@ ksp {
     testImplementation("app.cash.turbine:turbine:1.0.0")  // Flow testing
     testImplementation("com.google.truth:truth:1.1.5")    // Better assertions
     testImplementation("org.robolectric:robolectric:4.11.1")  // Android mocking
+    testImplementation("androidx.test:core-ktx:1.5.0")  // ApplicationProvider for Robolectric
 
     // Android Instrumented Testing
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
