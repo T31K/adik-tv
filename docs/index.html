@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Megaflix TV</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #08090a; color: #ededed; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background-image: radial-gradient(1200px 600px at 50% -10%, #1a1330 0%, #08090a 60%);
+  }
+  .card { max-width: 460px; width: 100%; text-align: center; }
+  h1 { font-size: 44px; font-weight: 800; letter-spacing: 2px; margin-bottom: 8px;
+       background: linear-gradient(90deg,#7f5bff,#4aa8ff,#ff6ad5); -webkit-background-clip: text;
+       background-clip: text; color: transparent; }
+  p.sub { color: #ededed99; margin-bottom: 28px; font-size: 15px; }
+  .ver { display: inline-block; font-size: 12px; color: #ededed80; border: 1px solid #ffffff22;
+         border-radius: 999px; padding: 4px 12px; margin-bottom: 28px; }
+  a.dl { display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+         background: #fff; color: #08090a; font-weight: 700; font-size: 17px;
+         padding: 16px 32px; border-radius: 999px; transition: transform .15s; }
+  a.dl:hover { transform: scale(1.04); }
+  .note { margin-top: 24px; font-size: 13px; color: #ededed80; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>MEGAFLIX</h1>
+    <p class="sub">Your movies &amp; shows, on the TV.</p>
+    <div class="ver" id="ver">v0.1.0</div><br>
+    <a class="dl" id="dl" href="https://github.com/T31K/megaflix-tv/releases/latest/download/megaflix-tv-0.1.0.apk">
+      &#11015;&nbsp; Download for Android TV
+    </a>
+    <p class="note">
+      Sideload on your Android TV: open this page on the TV (or use Downloader),
+      install the APK, allow "install unknown apps" once. Future updates arrive
+      inside the app automatically.
+    </p>
+  </div>
+</body>
+</html>
