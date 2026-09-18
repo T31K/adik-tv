@@ -18,7 +18,7 @@ import org.junit.Test
 class DiscoverDateWindowTest {
     private val api = mockk<TmdbApi>(relaxed = true)
     private val repository = MediaRepository(mockk(relaxed = true), api, mockk(relaxed = true),
-        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
     @Test fun theHomeScreensAnimeRowStillAsksWhenAnEpisodeAired() = runBlocking {
         coEvery {

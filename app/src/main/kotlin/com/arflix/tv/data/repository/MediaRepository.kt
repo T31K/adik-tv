@@ -108,7 +108,8 @@ class MediaRepository @Inject constructor(
     private val traktApi: TraktApi,
     private val okHttpClient: OkHttpClient,
     private val streamRepository: StreamRepository,
-    private val homeServerRepository: HomeServerRepository
+    private val homeServerRepository: HomeServerRepository,
+    private val megaflixLibrary: com.arflix.tv.megaflix.MegaflixLibraryBuilder
 ) {
 
     data class CategoryPageResult(
@@ -1939,13 +1940,15 @@ class MediaRepository @Inject constructor(
 
     /** A local catalog: filters the seed by the catalog id (Movies / TV Shows / all). */
     suspend fun loadLocalCatalog(catalog: CatalogConfig, maxItems: Int = 60): Category? {
-        val all = allSeedItems()
-        val filtered = when (catalog.id) {
-            "local_movies" -> all.filter { it.mediaType == MediaType.MOVIE }
-            "local_tv" -> all.filter { it.mediaType == MediaType.TV }
-            else -> all
-        }.take(maxItems)
-        return if (filtered.isEmpty()) null else Category(catalog.id, catalog.title, filtered)
+        // Megaflix: My Library is now driven by the content feed (Postgres → main-server),
+        // not the hardcoded demoSeed. Each item carries its download status for badging.
+        val filter = when (catalog.id) {
+            "local_movies" -> MediaType.MOVIE
+            "local_tv" -> MediaType.TV
+            else -> null
+        }
+        val items = megaflixLibrary.libraryItems(filter).take(maxItems)
+        return if (items.isEmpty()) null else Category(catalog.id, catalog.title, items)
     }
 
     suspend fun loadCustomCatalog(catalog: CatalogConfig, maxItems: Int = 40): Category? = coroutineScope {

@@ -14,7 +14,7 @@ import java.io.IOException
 
 class AddonCatalogPagingTest {
     private val streams = mockk<StreamRepository>()
-    private val media = spyk(MediaRepository(mockk(relaxed = true), mockk(), mockk(), mockk(), mockk(), streams, mockk()))
+    private val media = spyk(MediaRepository(mockk(relaxed = true), mockk(), mockk(), mockk(), mockk(), streams, mockk(), mockk(relaxed = true)))
     private val catalog = CatalogConfig("addon-test", "Test", CatalogSourceType.ADDON,
         addonId = "test", addonCatalogType = "movie", addonCatalogId = "popular")
 

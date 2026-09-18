@@ -14,7 +14,7 @@ import org.junit.Test
 class MediaSearchTest {
     private val api = mockk<TmdbApi>()
     private val repository = MediaRepository(mockk(relaxed = true), api, mockk(relaxed = true),
-        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
     @Test fun oneRequestReturnsTitlesAndPeopleWithoutFetchingCreditsOrImages() = runBlocking {
         val show = TmdbMediaItem(id = 1, name = "Loki", mediaType = "tv", posterPath = "/loki.jpg")
