@@ -271,6 +271,17 @@ fun MediaCard(
                     )
                 }
 
+                // Megaflix: download-state badge (top-start of the artwork).
+                when (item.downloadStatus) {
+                    com.arflix.tv.data.model.DownloadStatus.COMING_SOON ->
+                        MegaflixStatusBadge("COMING SOON", Modifier.align(Alignment.TopStart))
+                    com.arflix.tv.data.model.DownloadStatus.DOWNLOADING ->
+                        MegaflixStatusBadge("↓ ${(item.downloadProgress * 100).toInt()}%", Modifier.align(Alignment.TopStart))
+                    com.arflix.tv.data.model.DownloadStatus.FAILED ->
+                        MegaflixStatusBadge("RETRY", Modifier.align(Alignment.TopStart))
+                    com.arflix.tv.data.model.DownloadStatus.READY -> {}
+                }
+
                 if (showCollectionTitleOverlay) {
                     Box(
                         modifier = Modifier
@@ -794,6 +805,24 @@ fun FeaturedMediaCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
+        )
+    }
+}
+
+/** Megaflix: small pill badge for a card's download state (Coming Soon / progress / retry). */
+@androidx.compose.runtime.Composable
+private fun MegaflixStatusBadge(text: String, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier) {
+    androidx.compose.foundation.layout.Box(
+        modifier = modifier
+            .padding(6.dp)
+            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 10.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
         )
     }
 }

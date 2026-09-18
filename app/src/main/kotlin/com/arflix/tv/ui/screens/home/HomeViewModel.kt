@@ -214,6 +214,7 @@ class HomeViewModel @Inject constructor(
     private val apkDownloader: com.arflix.tv.updater.ApkDownloader,
     private val updatePreferences: com.arflix.tv.updater.UpdatePreferences,
     private val updateStatusManager: com.arflix.tv.updater.UpdateStatusManager,
+    private val megaflixSyncManager: com.arflix.tv.megaflix.MegaflixSyncManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.NONE) {
@@ -1670,7 +1671,23 @@ class HomeViewModel @Inject constructor(
         )
     }
 
+    // Megaflix: sync the content feed on launch, then poll /rev every 60s while alive.
+    private fun startMegaflixSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { megaflixSyncManager.sync() }
+            loadHomeData()
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                if (runCatching { megaflixSyncManager.revChanged() }.getOrDefault(false)) {
+                    runCatching { megaflixSyncManager.sync() }
+                    loadHomeData()
+                }
+            }
+        }
+    }
+
     init {
+        startMegaflixSync()
         viewModelScope.launch {
             profileManager.activeProfileId
                 .distinctUntilChanged()

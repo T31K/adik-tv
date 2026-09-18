@@ -424,7 +424,7 @@ fun DetailsScreen(
     val currentSelectedEpisodeIdentity = rememberUpdatedState(selectedEpisodeIdentity)
 
     val onButtonClickRemembered = remember(isMobile, mediaType, mediaId) {
-        { idx: Int ->
+        onBtn@{ idx: Int ->
             val state = currentUiState.value
             val currentEpIdx = currentEpisodeIndex.value
             val selectedEp = state.episodes.firstOrNull {
@@ -432,6 +432,11 @@ fun DetailsScreen(
             }
             when (idx) {
                 0 -> { // Play
+                    // Megaflix: block Play until the item is downloaded (READY).
+                    val dlStatus = state.item?.downloadStatus
+                    if (dlStatus != null && dlStatus != com.arflix.tv.data.model.DownloadStatus.READY) {
+                        return@onBtn
+                    }
                     val localUriDirect = state.item?.localUri
                     if (localUriDirect != null) {
                         // Megaflix: local file — hand the URI straight to the player,
@@ -1557,7 +1562,15 @@ private fun DetailsContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Primary mobile actions
-                    val playButtonLabel = if (!playLabel.isNullOrBlank()) playLabel else stringResource(R.string.play)
+                    // Megaflix: reflect download state on the primary button.
+                    val playButtonLabel = when {
+                        item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.DOWNLOADING ->
+                            "Downloading ${(item.downloadProgress * 100).toInt()}%"
+                        item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.COMING_SOON ||
+                            item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.FAILED -> "Coming soon"
+                        !playLabel.isNullOrBlank() -> playLabel
+                        else -> stringResource(R.string.play)
+                    }
                     MobileActionButton(
                         icon = Icons.Default.PlayArrow,
                         text = playButtonLabel,
@@ -2279,10 +2292,14 @@ private fun DetailsContent(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val playButtonLabel = if (!playLabel.isNullOrBlank()) {
-                        playLabel
-                    } else {
-                        stringResource(R.string.play)
+                    // Megaflix: reflect download state on the primary button.
+                    val playButtonLabel = when {
+                        item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.DOWNLOADING ->
+                            "Downloading ${(item.downloadProgress * 100).toInt()}%"
+                        item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.COMING_SOON ||
+                            item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.FAILED -> "Coming soon"
+                        !playLabel.isNullOrBlank() -> playLabel
+                        else -> stringResource(R.string.play)
                     }
                     Box(modifier = Modifier.clickable { onButtonClick(0) }) {
                         PremiumActionButton(
