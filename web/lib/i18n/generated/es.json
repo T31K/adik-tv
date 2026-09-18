@@ -1,0 +1,19 @@
+{
+  "AdGuard": "AdGuard",
+  "Bold / outline": "Negrita/contorno",
+  "Cloudflare": "Llamada de nube",
+  "Desktop / browser": "Escritorio/navegador",
+  "Emby": "Emby",
+  "Gemini": "Géminis",
+  "Google": "Google",
+  "Groq": "Groq",
+  "Jellyfin": "medusa",
+  "No": "No",
+  "Normal / shadow": "Normal/sombra",
+  "Plex": "Plex",
+  "Trakt + Simkl": "Trakt + Simkl",
+  "Video": "Vídeo",
+  "proxy": "apoderado",
+  "proxy with media headers": "proxy con encabezados multimedia",
+  "via": "vía"
+}

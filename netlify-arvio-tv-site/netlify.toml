@@ -1,0 +1,108 @@
+[build]
+  command = "echo Static site ready"
+  publish = "."
+
+[[plugins]]
+  package = "./plugins/indexnow"
+
+[[redirects]]
+  from = "/privacy"
+  to = "https://github.com/ProdigyV21/ARVIO/blob/main/PRIVACY.md"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/app"
+  to = "https://web.arvio.tv"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/app/*"
+  to = "https://web.arvio.tv/:splat"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/go/premium"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/nav"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/hero"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/spotlight"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/preview"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/details"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/faq"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/premium/footer"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/membership/nav"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/membership/spotlight"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/membership/details"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/membership/footer"
+  to = "/premium-redirect.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/go/support/opensource"
+  to = "https://ko-fi.com/arvio?utm_source=arvio.tv&utm_medium=website&utm_campaign=support&utm_content=opensource"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/go/support/footer"
+  to = "https://ko-fi.com/arvio?utm_source=arvio.tv&utm_medium=website&utm_campaign=support&utm_content=footer"
+  status = 302
+  force = true

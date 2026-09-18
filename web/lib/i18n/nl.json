@@ -1,0 +1,10 @@
+{
+  "Play {value0}": "{value0} afspelen",
+  "Collection": "Collectie",
+  "Watching": "Aan het kijken",
+  "Completed": "Voltooid",
+  "Dropped": "Gestopt",
+  "Watchlists": "Kijklijsten",
+  "My watchlist": "Mijn kijklijst",
+  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: gebruik het Jellyfin-compatibele adres. Optioneel profiel: username#ProfileName. Beveiligd profiel: password#PIN."
+}

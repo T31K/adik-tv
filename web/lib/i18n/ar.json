@@ -1,0 +1,8 @@
+{
+  "Play {value0}": "تشغيل {value0}",
+  "Collection": "المجموعة",
+  "Watching": "قيد المشاهدة",
+  "Completed": "مكتمل",
+  "Dropped": "متروك",
+  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: استخدم العنوان المتوافق مع Jellyfin. ملف شخصي اختياري: username#ProfileName. ملف شخصي محمي: password#PIN."
+}

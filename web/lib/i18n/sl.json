@@ -1,0 +1,8 @@
+{
+  "Play {value0}": "Predvajaj {value0}",
+  "Collection": "Zbirka",
+  "Watching": "Gledam",
+  "Completed": "Dokončano",
+  "Dropped": "Opuščeno",
+  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: uporabite naslov, združljiv z Jellyfin. Izbirni profil: username#ProfileName. Zaščiten profil: password#PIN."
+}

@@ -1,0 +1,8 @@
+{
+  "Play {value0}": "Erreproduzitu {value0}",
+  "Collection": "Bilduma",
+  "Watching": "Ikusten",
+  "Completed": "Amaituta",
+  "Dropped": "Utzita",
+  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: erabili Jellyfin-ekin bateragarria den helbidea. Aukerako profila: username#ProfileName. Babestutako profila: password#PIN."
+}

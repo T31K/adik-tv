@@ -1,0 +1,15 @@
+node_modules/
+.library-ui-test/
+.iptv-groups-ui-test/
+.next/
+.next-overhaul/
+out/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+
+# The repo-root .gitignore ignores all *.png (screenshots). Re-include the
+# bundled avatar/static image assets the web app needs at runtime.
+!public/avatars/*.png
+!public/**/*.png
