@@ -83,13 +83,13 @@ fun ArvioLoadingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.arvio_loading_logo),
-                contentDescription = "ARVIO",
-                contentScale = ContentScale.Fit,
+            Text(
+                text = "MEGAFLIX",
+                color = Color.White,
+                fontSize = 44.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 6.sp,
                 modifier = Modifier
-                    .fillMaxWidth(0.58f)
-                    .widthIn(max = 360.dp)
                     .graphicsLayer {
                         alpha = reveal.value * logoAlpha
                         scaleX = 0.94f + (0.06f * reveal.value)

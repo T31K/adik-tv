@@ -543,13 +543,14 @@ fun ArvioLoadingScreen() {
             )
         }
 
-        Image(
-            painter = painterResource(id = R.drawable.arvio_loading_logo),
-            contentDescription = "ARVIO",
+        Text(
+            text = "MEGAFLIX",
+            color = Color.White,
+            fontSize = 44.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 6.sp,
             modifier = Modifier
                 .padding(horizontal = 24.dp)
-                .fillMaxWidth(0.52f)
-                .widthIn(max = 320.dp)
                 .graphicsLayer {
                     alpha = reveal.value * logoAlpha
                     val scale = 0.88f + (0.12f * reveal.value)
@@ -557,7 +558,6 @@ fun ArvioLoadingScreen() {
                     scaleY = scale
                     translationY = (1f - reveal.value) * 18.dp.toPx()
                 },
-            contentScale = ContentScale.Fit,
         )
     }
 }
