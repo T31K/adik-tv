@@ -272,14 +272,16 @@ fun MediaCard(
                 }
 
                 // Megaflix: download-state badge (top-start of the artwork).
-                when (item.downloadStatus) {
-                    com.arflix.tv.data.model.DownloadStatus.COMING_SOON ->
-                        MegaflixStatusBadge("COMING SOON", Modifier.align(Alignment.TopStart))
-                    com.arflix.tv.data.model.DownloadStatus.DOWNLOADING ->
-                        MegaflixStatusBadge("↓ ${(item.downloadProgress * 100).toInt()}%", Modifier.align(Alignment.TopStart))
-                    com.arflix.tv.data.model.DownloadStatus.FAILED ->
-                        MegaflixStatusBadge("RETRY", Modifier.align(Alignment.TopStart))
-                    com.arflix.tv.data.model.DownloadStatus.READY -> {}
+                // NB: use == comparisons, not `when` — MediaItems restored from the Gson
+                // disk cache can have a null downloadStatus (Gson bypasses Kotlin defaults),
+                // and `when(enum)` compiles to .ordinal() which NPEs on null.
+                val dlStatus = item.downloadStatus
+                if (dlStatus == com.arflix.tv.data.model.DownloadStatus.COMING_SOON) {
+                    MegaflixStatusBadge("COMING SOON", Modifier.align(Alignment.TopStart))
+                } else if (dlStatus == com.arflix.tv.data.model.DownloadStatus.DOWNLOADING) {
+                    MegaflixStatusBadge("↓ ${(item.downloadProgress * 100).toInt()}%", Modifier.align(Alignment.TopStart))
+                } else if (dlStatus == com.arflix.tv.data.model.DownloadStatus.FAILED) {
+                    MegaflixStatusBadge("RETRY", Modifier.align(Alignment.TopStart))
                 }
 
                 if (showCollectionTitleOverlay) {
