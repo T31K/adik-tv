@@ -486,11 +486,7 @@ private fun ProfileAvatar(
     onDelete: () -> Unit
 ) {
     var isFocused by remember { mutableIntStateOf(0) }
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused > 0) 1.1f else 1f,
-        animationSpec = tween(150),
-        label = "scale"
-    )
+    // Megaflix: active/focused profile shows a border only — no size change.
 
     val isTouchDevice = LocalDeviceType.current.isTouchDevice()
     Column(
@@ -515,7 +511,6 @@ private fun ProfileAvatar(
                 Box(
                     modifier = Modifier
                         .size(avatarSize)
-                        .scale(scale)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { onClick() }
                 ) { avatarContent() }
@@ -524,7 +519,6 @@ private fun ProfileAvatar(
                     onClick = onClick,
                     modifier = Modifier
                         .size(avatarSize)
-                        .scale(scale)
                         .onFocusChanged { focusState ->
                             val wasFocused = isFocused > 0
                             isFocused = if (focusState.isFocused) 1 else 0

@@ -686,7 +686,7 @@ fun DetailsScreen(
                                 val hasAnyValidRating = uiState.episodes.any { (it.imdbRating.toFloatOrNull() ?: 0f) > 0f }
                                 val hasRatings = isTV && hasEpisodes && uiState.showEpisodeRatings && hasAnyValidRating
                                 val hasCast = uiState.cast.isNotEmpty()
-                                val hasReviews = uiState.reviews.isNotEmpty()
+                                val hasReviews = false // Megaflix: reviews hidden
                                 val hasSimilar = uiState.similar.isNotEmpty()
                                 val hasCollection = uiState.collectionItems.isNotEmpty()
                                 focusedSection = when (focusedSection) {
@@ -743,7 +743,7 @@ fun DetailsScreen(
                                 val hasRatings = isTV && hasEpisodes && uiState.showEpisodeRatings && hasAnyValidRating
                                 val hasSeasons = uiState.totalSeasons > 1
                                 val hasCast = uiState.cast.isNotEmpty()
-                                val hasReviews = uiState.reviews.isNotEmpty()
+                                val hasReviews = false // Megaflix: reviews hidden
                                 val hasSimilar = uiState.similar.isNotEmpty()
                                 val hasCollection = uiState.collectionItems.isNotEmpty()
                                 focusedSection = when (focusedSection) {
@@ -938,7 +938,7 @@ fun DetailsScreen(
                         totalSeasons = uiState.totalSeasons,
                         currentSeason = uiState.currentSeason,
                         cast = uiState.cast,
-                        reviews = uiState.reviews,
+                        reviews = emptyList(), // Megaflix: reviews hidden
                         similar = uiState.similar,
                         similarLogoUrls = uiState.similarLogoUrls,
                         collectionItems = uiState.collectionItems,
@@ -1138,7 +1138,8 @@ private fun handleLeft(
     setCollection: (Int) -> Unit
 ): Boolean {
     when (section) {
-        FocusSection.BUTTONS -> if (buttonIdx > 0) setButton(buttonIdx - 1)
+        // Megaflix: only Play (0) and Save (4) remain, so hop straight between them.
+        FocusSection.BUTTONS -> if (buttonIdx > 0) setButton(0)
         FocusSection.EPISODES -> if (episodeIdx > 0) setEpisode(episodeIdx - 1)
         FocusSection.RATINGS -> if (ratingsIdx > 0) setRatings(ratingsIdx - 1)
         FocusSection.SEASONS -> if (seasonIdx > 0) setSeason(seasonIdx - 1)
@@ -1161,8 +1162,8 @@ private fun handleRight(
 ): Boolean {
     when (section) {
         FocusSection.BUTTONS -> {
-            val maxButton = if (uiState.collectionId != null) 5 else 4
-            if (buttonIdx < maxButton) setButton(buttonIdx + 1)
+            // Megaflix: only Play (0) and Save (4) remain, so hop straight to Save.
+            if (buttonIdx < 4) setButton(4)
         }
         FocusSection.EPISODES -> if (episodeIdx < uiState.episodes.size - 1) setEpisode(episodeIdx + 1)
         FocusSection.RATINGS -> {
@@ -1574,38 +1575,13 @@ private fun DetailsContent(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MobileIconActionButton(
-                            icon = Icons.Default.List,
-                            contentDescription = stringResource(R.string.sources),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(1) }
-                        )
-                        MobileIconActionButton(
-                            icon = Icons.Default.Movie,
-                            contentDescription = stringResource(R.string.trailer),
-                            enabled = hasTrailer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(2) }
-                        )
-                        MobileIconActionButton(
-                            icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
-                            contentDescription = if (buttonWatched) stringResource(R.string.watched) else stringResource(R.string.details_btn_mark_watched),
-                            isActive = buttonWatched,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(3) }
-                        )
+                        // Megaflix: keep only Save (watchlist) alongside Play.
                         MobileIconActionButton(
                             icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             contentDescription = if (isInWatchlist) stringResource(R.string.details_in_watchlist) else stringResource(R.string.add_to_watchlist),
                             isActive = isInWatchlist,
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .height(54.dp),
                             onClick = { onButtonClick(4) }
                         )
@@ -1622,7 +1598,7 @@ private fun DetailsContent(
                             fontWeight = FontWeight.Normal
                         ),
                         color = Color.White.copy(alpha = 0.88f),
-                        maxLines = 4,
+                        maxLines = 12, // Megaflix: show fuller summary
                         overflow = TextOverflow.Ellipsis
                     )
 
@@ -2123,7 +2099,7 @@ private fun DetailsContent(
                 val hasSecondaryMetadata = primaryNetworkLogo != null ||
                     hasRatingMetadata ||
                     hasBudgetMetadata
-                val overviewMaxHeight = if (isCompactHeight) 58.dp else 68.dp
+                val overviewMaxHeight = if (isCompactHeight) 108.dp else 132.dp // Megaflix: show fuller summary
 
                 val separatorStyle = ArflixTypography.caption.copy(
                     fontSize = 13.sp,
@@ -2285,7 +2261,7 @@ private fun DetailsContent(
                             shadow = textShadow
                         ),
                         color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 4,
+                        maxLines = 8, // Megaflix: show fuller summary
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -2316,34 +2292,7 @@ private fun DetailsContent(
                             isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 0
                         )
                     }
-                    Box(modifier = Modifier.clickable { onButtonClick(1) }) {
-                        PremiumActionButton(
-                            icon = Icons.Default.List,
-                            text = stringResource(R.string.sources),
-                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 1,
-                            isIconOnly = true
-                        )
-                    }
-                    Box(modifier = Modifier
-                        .clickable(enabled = hasTrailer) { onButtonClick(2) }
-                        .graphicsLayer { alpha = if (hasTrailer) 1f else 0.4f }
-                    ) {
-                        PremiumActionButton(
-                            icon = Icons.Default.Movie,
-                            text = stringResource(R.string.trailer),
-                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 2,
-                            isIconOnly = true
-                        )
-                    }
-                    Box(modifier = Modifier.clickable { onButtonClick(3) }) {
-                        PremiumActionButton(
-                            icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
-                            text = if (buttonWatched) stringResource(R.string.watched) else stringResource(R.string.details_btn_mark_watched),
-                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 3,
-                            isActive = buttonWatched,
-                            isIconOnly = true
-                        )
-                    }
+                    // Megaflix: keep only Save (watchlist) alongside Play.
                     Box(modifier = Modifier.clickable { onButtonClick(4) }) {
                         PremiumActionButton(
                             icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -2352,18 +2301,6 @@ private fun DetailsContent(
                             isIconOnly = true,
                             isActive = isInWatchlist
                         )
-                    }
-
-                    // "View Collection" button — only shown when this movie belongs to a TMDB collection
-                    if (hasCollectionAction) {
-                        Box(modifier = Modifier.clickable { onButtonClick(5) }) {
-                            PremiumActionButton(
-                                icon = Icons.Default.Star,
-                                text = stringResource(R.string.view_collection),
-                                isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 5,
-                                isIconOnly = true
-                            )
-                        }
                     }
                 }
             }
