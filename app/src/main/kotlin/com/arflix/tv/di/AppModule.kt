@@ -8,6 +8,7 @@ import com.arflix.tv.data.api.StreamApi
 import com.arflix.tv.data.api.SupabaseApi
 import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.api.TraktApi
+import com.arflix.tv.megaflix.MegaflixFeedApi
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.util.Constants
 import dagger.Module
@@ -82,6 +83,18 @@ object AppModule {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TraktApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @JvmStatic
+    fun provideMegaflixFeedApi(okHttpClient: OkHttpClient): MegaflixFeedApi {
+        return Retrofit.Builder()
+            .baseUrl(Constants.MEGAFLIX_FEED_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MegaflixFeedApi::class.java)
     }
 
     @Provides

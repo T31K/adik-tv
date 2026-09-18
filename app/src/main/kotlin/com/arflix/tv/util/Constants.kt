@@ -40,6 +40,9 @@ object Constants {
     // API base URLs.
     const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
     const val TRAKT_API_URL = "https://api.trakt.tv/"
+    // Megaflix content feed (Postgres-backed, served by main-server).
+    const val MEGAFLIX_FEED_BASE_URL = "https://api.kaleidoscopical.com/megaflix/"
+    const val MEGAFLIX_FEED_TOKEN = "mgfx_7b2cedc4b5f053072628a02e152d8a87"
     const val SIMKL_BASE_URL = "https://api.simkl.com/"
     // MDBList is an optional per-profile tracking and ratings integration. Auth is a static
     // API key passed as an `?apikey=` query parameter (no OAuth), so no client
