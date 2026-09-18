@@ -76,6 +76,10 @@ data class MediaItem(
     // Megaflix: when non-null, this item is a local file — play this URI directly
     // (bypassing stream/addon resolution). Metadata still comes from TMDB via `id`.
     val localUri: String? = null,
+    // Megaflix: download state for the feed-driven library (default READY so all
+    // non-library items — search results, TMDB rows — render as normal playable cards).
+    val downloadStatus: DownloadStatus = DownloadStatus.READY,
+    val downloadProgress: Float = 0f,
 ) : Serializable
 
 enum class MediaType {
