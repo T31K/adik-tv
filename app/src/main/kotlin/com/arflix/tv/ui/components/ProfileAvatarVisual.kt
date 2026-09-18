@@ -2,7 +2,10 @@ package com.arflix.tv.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.res.painterResource
+import com.arflix.tv.R
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
@@ -39,6 +42,22 @@ fun ProfileAvatarVisual(
     letterFontSize: TextUnit = 14.sp,
     iconPadding: Dp = 4.dp
 ) {
+    // Megaflix: fixed profiles use bundled avatar images.
+    val bundledAvatar = when (profile.id) {
+        "mom" -> R.drawable.avatar_mom
+        "timon" -> R.drawable.avatar_dk
+        else -> null
+    }
+    if (bundledAvatar != null) {
+        Image(
+            painter = painterResource(id = bundledAvatar),
+            contentDescription = profile.name,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.fillMaxSize()
+        )
+        return
+    }
+
     val context = LocalContext.current
     val avatarManager = remember(context) {
         EntryPointAccessors.fromApplication(
