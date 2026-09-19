@@ -99,7 +99,7 @@ fun Modifier.arvioFocusable(
             role = Role.Button,
             interactionSource = interactionSource,
             indication = null,
-            onClick = onClick,
+            onClick = { com.arflix.tv.util.NavSound.playSelect(); onClick?.invoke() },
             onLongClick = onLongClick,
         )
     } else if (onClick != null) {
@@ -108,7 +108,7 @@ fun Modifier.arvioFocusable(
             role = Role.Button,
             interactionSource = interactionSource,
             indication = null,
-            onClick = onClick,
+            onClick = { com.arflix.tv.util.NavSound.playSelect(); onClick?.invoke() },
         )
     } else {
         Modifier
@@ -251,7 +251,7 @@ fun ArvioFocusableSurface(
                 gradientEndColor = gradientEndColor,
                 showRestBorder = showRestBorder,
                 animateFocus = animateFocus,
-                onClick = onClick,
+                onClick = { com.arflix.tv.util.NavSound.playSelect(); onClick?.invoke() },
                 onLongClick = onLongClick,
                 onFocusChanged = {
                     isFocused = it
