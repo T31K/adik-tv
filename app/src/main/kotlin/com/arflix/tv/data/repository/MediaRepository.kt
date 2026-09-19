@@ -1940,15 +1940,23 @@ class MediaRepository @Inject constructor(
     }
 
     /** A local catalog: filters the seed by the catalog id (Movies / TV Shows / all). */
-    suspend fun loadLocalCatalog(catalog: CatalogConfig, maxItems: Int = 60): Category? {
-        // Megaflix: My Library is now driven by the content feed (Postgres → main-server),
-        // not the hardcoded demoSeed. Each item carries its download status for badging.
-        val filter = when (catalog.id) {
-            "local_movies" -> MediaType.MOVIE
-            "local_tv" -> MediaType.TV
-            else -> null
+    suspend fun loadLocalCatalog(catalog: CatalogConfig, maxItems: Int = 200): Category? {
+        // Megaflix/ADIK: home is category rows driven by the feed. Movies are built once
+        // (cached) and each row filters that list by recency or TMDB genre.
+        if (catalog.id == "local_tv") {
+            val tv = megaflixLibrary.libraryItems(MediaType.TV).take(maxItems)
+            return if (tv.isEmpty()) null else Category(catalog.id, catalog.title, tv)
         }
-        val items = megaflixLibrary.libraryItems(filter).take(maxItems)
+        val all = megaflixLibrary.libraryItems(MediaType.MOVIE)
+        val items = when {
+            catalog.id == "cat_new" -> all.sortedByDescending { it.year }.take(maxItems)
+            catalog.id == "cat_all" -> all.sortedBy { it.title }.take(maxItems)
+            catalog.id.startsWith("cat_g_") -> {
+                val g = catalog.id.removePrefix("cat_g_").toIntOrNull()
+                all.filter { g != null && it.genreIds.contains(g) }.take(maxItems)
+            }
+            else -> all.take(maxItems)
+        }
         return if (items.isEmpty()) null else Category(catalog.id, catalog.title, items)
     }
 

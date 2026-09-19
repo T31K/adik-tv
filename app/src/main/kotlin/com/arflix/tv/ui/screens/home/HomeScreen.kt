@@ -470,6 +470,8 @@ private const val HOME_VIEW_ALL_FOCUS_KEY = "__view_all__"
  * collection tiles (which need their own routing) are excluded.
  */
 internal fun homeRowSupportsViewAll(category: Category, hasMore: Boolean): Boolean {
+    return false // ADIK: no "View all" card on rows.
+    @Suppress("UNREACHABLE_CODE")
     if (category.id == "continue_watching" || category.id.startsWith("collection_row_")) return false
     val realItems = category.items.filterNot { it.isPlaceholder }
     if (realItems.isEmpty()) return false

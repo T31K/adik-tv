@@ -29,3 +29,14 @@ data class FeedItemDto(
 data class RevResponseDto(
     @SerializedName("rev") val rev: String = ""
 )
+
+@Keep
+data class RowDto(
+    @SerializedName("id") val id: String = "",
+    @SerializedName("title") val title: String = ""
+)
+
+@Keep
+data class RowsResponseDto(
+    @SerializedName("rows") val rows: List<RowDto> = emptyList()
+)

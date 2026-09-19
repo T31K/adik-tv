@@ -5120,30 +5120,12 @@ private fun PulsingLogo(
                     )
                 }
             }
-            Box(
-                modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
-                contentAlignment = Alignment.Center
-            ) {
-                if (!logoUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = logoUrl, contentDescription = title, contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth(0.76f).height(logoHeight)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(if (isTouchDevice) 56.dp else 74.dp)
-                            .border(3.dp, Color.White.copy(alpha = 0.9f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(if (isTouchDevice) 14.dp else 18.dp)
-                                .background(Color.White.copy(alpha = 0.95f), CircleShape)
-                        )
-                    }
-                }
-            }
+            // ADIK: plain loading spinner instead of the pulsing movie logo.
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(if (isTouchDevice) 48.dp else 64.dp),
+                color = Color.White,
+                strokeWidth = 4.dp
+            )
         }
 
         if (progress != null) {

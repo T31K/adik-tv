@@ -557,11 +557,8 @@ fun DetailsScreen(
     }
 
     val onCastClickRemembered = remember {
-        { idx: Int ->
-            val member = currentUiState.value.cast.getOrNull(idx)
-            if (member != null) {
-                viewModel.loadPerson(member.id)
-            }
+        { _: Int ->
+            // ADIK: cast bubbles are not clickable (no person modal).
         }
     }
 

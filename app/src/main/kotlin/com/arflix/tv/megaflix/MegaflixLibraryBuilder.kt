@@ -41,6 +41,11 @@ class MegaflixLibraryBuilder @Inject constructor(
     @Volatile
     private var moviePathCache: Map<Int, String> = emptyMap()
 
+    // Built movie list, cached and reused across the home's genre rows (TMDB is fetched
+    // once per feed). Invalidated automatically when the feed list is replaced (each sync).
+    @Volatile private var movieCache: List<MediaItem>? = null
+    @Volatile private var movieCacheFeed: List<FeedItemDto>? = null
+
     /** Synchronous per-episode file lookup for the player. Null if not downloaded. */
     fun cachedEpisodePath(tmdbId: Int, season: Int, episode: Int): String? =
         episodePathCache[Triple(tmdbId, season, episode)]
@@ -50,6 +55,10 @@ class MegaflixLibraryBuilder @Inject constructor(
 
     suspend fun libraryItems(filter: MediaType?): List<MediaItem> = withContext(Dispatchers.IO) {
         val feed = syncManager.feedItems.value
+        // Fast path: reuse the cached movie list across the home's genre rows.
+        if (filter == MediaType.MOVIE) {
+            movieCache?.let { if (movieCacheFeed === feed) return@withContext it }
+        }
         val records = store.all()
 
         // Refresh the episode-path cache from ALL series rows that are downloaded.
@@ -75,7 +84,7 @@ class MegaflixLibraryBuilder @Inject constructor(
 
         val wanted = feed.filter { filter == null || typeOf(it) == filter }
 
-        coroutineScope {
+        val result = coroutineScope {
             val gate = Semaphore(6)
             if (filter == MediaType.TV) {
                 // Group episode rows into one card per show.
@@ -93,6 +102,11 @@ class MegaflixLibraryBuilder @Inject constructor(
                 (movies + shows).awaitAll()
             }
         }
+        if (filter == MediaType.MOVIE) {
+            movieCache = result
+            movieCacheFeed = feed
+        }
+        result
     }
 
     private fun typeOf(item: FeedItemDto): MediaType =
@@ -115,6 +129,7 @@ class MegaflixLibraryBuilder @Inject constructor(
                     ?: d.backdropPath?.let { "${Constants.BACKDROP_BASE}$it" } ?: "",
                 backdrop = d.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
                 originalLanguage = d.originalLanguage,
+                genreIds = d.genres.map { it.id },
                 mediaType = MediaType.MOVIE
             )
         }.getOrElse {

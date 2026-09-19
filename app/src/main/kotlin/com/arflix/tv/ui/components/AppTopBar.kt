@@ -65,7 +65,7 @@ val AppTopBarHorizontalPadding = 28.dp
 // Settings is NOT in this list — it's rendered as a standalone gear icon on the right.
 // Megaflix: local-only — hide Watchlist (online) and TV (IPTV/live). Keep Search + Home.
 private val NAV_ITEMS = SidebarItem.entries.filter {
-    it != SidebarItem.SETTINGS && it != SidebarItem.TV && it != SidebarItem.WATCHLIST
+    it != SidebarItem.SETTINGS && it != SidebarItem.WATCHLIST
 }
 
 fun topBarMaxIndex(hasProfile: Boolean): Int {

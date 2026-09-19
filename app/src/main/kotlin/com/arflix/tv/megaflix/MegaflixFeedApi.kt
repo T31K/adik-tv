@@ -15,4 +15,9 @@ interface MegaflixFeedApi {
     suspend fun getRev(
         @Query("k") token: String
     ): RevResponseDto
+
+    @GET("rows")
+    suspend fun getRows(
+        @Query("k") token: String
+    ): RowsResponseDto
 }

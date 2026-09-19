@@ -67,7 +67,8 @@ class CatalogRepository @Inject constructor(
     private val profileManager: ProfileManager,
     private val traktApi: TraktApi,
     private val okHttpClient: OkHttpClient,
-    private val invalidationBus: CloudSyncInvalidationBus
+    private val invalidationBus: CloudSyncInvalidationBus,
+    private val megaflixFeedApi: com.arflix.tv.megaflix.MegaflixFeedApi
 ) {
     private val bundledPreinstalledCatalogsById by lazy(LazyThreadSafetyMode.NONE) {
         MediaRepository.buildPreinstalledDefaults().associateBy { it.id }
@@ -199,20 +200,46 @@ class CatalogRepository @Inject constructor(
         return resolved
     }
 
-    // Megaflix: local library split into Movies + TV Shows rows.
-    private val localCatalogs = listOf(
-        CatalogConfig(id = "local_movies", title = "Movies", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
-        CatalogConfig(id = "local_tv", title = "TV Shows", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+    // Megaflix/ADIK: home category rows come from the API (/megaflix/rows) so they can
+    // be changed/reordered server-side without an app update. These are the fallback
+    // used only if the rows endpoint is unreachable. MediaRepository.loadLocalCatalog
+    // maps each id to a filter ("cat_new", "cat_all", "cat_g_<tmdbGenreId>").
+    @Volatile private var cachedRowCatalogs: List<CatalogConfig>? = null
+
+    /** Fetch the dynamic home rows from the API; cache; fall back to defaults on failure. */
+    private suspend fun localCatalogs(): List<CatalogConfig> {
+        cachedRowCatalogs?.let { return it }
+        val fetched = runCatching {
+            megaflixFeedApi.getRows(com.arflix.tv.util.Constants.MEGAFLIX_FEED_TOKEN).rows
+                .filter { it.id.isNotBlank() && it.title.isNotBlank() }
+                .map { CatalogConfig(id = it.id, title = it.title, sourceType = CatalogSourceType.LOCAL, isPreinstalled = false) }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+        val result = fetched ?: defaultLocalCatalogs
+        cachedRowCatalogs = result
+        return result
+    }
+
+    private val defaultLocalCatalogs = listOf(
+        CatalogConfig(id = "cat_new", title = "New Releases", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_878", title = "Sci-Fi", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_28", title = "Action", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_12", title = "Adventure", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_16", title = "Animation", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_10751", title = "Family", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_35", title = "Comedy", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_18", title = "Drama", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_g_53", title = "Thriller", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
+        CatalogConfig(id = "cat_all", title = "All Movies", sourceType = CatalogSourceType.LOCAL, isPreinstalled = false),
     )
 
     suspend fun getCatalogs(): List<CatalogConfig> {
-        return localCatalogs + readCatalogsForActiveProfile()
+        return localCatalogs() + readCatalogsForActiveProfile()
     }
 
     suspend fun getCatalogsForProfile(profileId: String): List<CatalogConfig> {
         val safeProfileId = profileId.trim().ifBlank { "default" }
         val prefs = context.settingsDataStore.data.first()
-        return localCatalogs + sanitizeCollectionCatalogs(readCatalogsFromPrefs(safeProfileId, prefs))
+        return localCatalogs() + sanitizeCollectionCatalogs(readCatalogsFromPrefs(safeProfileId, prefs))
     }
 
     private fun isBundledPreinstalledCatalogId(catalogId: String): Boolean {
