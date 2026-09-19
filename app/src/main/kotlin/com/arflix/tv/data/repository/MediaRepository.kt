@@ -1827,7 +1827,8 @@ class MediaRepository @Inject constructor(
     // Maps a matched TMDB id -> local file URI, populated by loadLocalCatalog so
     // the details screen can restore localUri after re-fetching metadata by id.
     @Volatile private var localUriByTmdbId: Map<Int, String> = emptyMap()
-    fun localUriForId(tmdbId: Int): String? = localUriByTmdbId[tmdbId]
+    fun localUriForId(tmdbId: Int): String? =
+        localUriByTmdbId[tmdbId] ?: megaflixLibrary.cachedMoviePath(tmdbId)
 
     private data class LocalVideoFile(val id: Long, val uri: android.net.Uri, val displayName: String)
     private data class ParsedName(val title: String, val year: Int?)

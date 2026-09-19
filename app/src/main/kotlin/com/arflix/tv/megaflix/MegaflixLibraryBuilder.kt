@@ -36,9 +36,17 @@ class MegaflixLibraryBuilder @Inject constructor(
     @Volatile
     private var episodePathCache: Map<Triple<Int, Int, Int>, String> = emptyMap()
 
+    // tmdbId -> absolute local file path, READY movies only. Used to restore the
+    // detail screen's localUri (ARVIO drops it when it re-fetches metadata by id).
+    @Volatile
+    private var moviePathCache: Map<Int, String> = emptyMap()
+
     /** Synchronous per-episode file lookup for the player. Null if not downloaded. */
     fun cachedEpisodePath(tmdbId: Int, season: Int, episode: Int): String? =
         episodePathCache[Triple(tmdbId, season, episode)]
+
+    /** Synchronous movie file lookup (restores detail-screen localUri). Null if not downloaded. */
+    fun cachedMoviePath(tmdbId: Int): String? = moviePathCache[tmdbId]
 
     suspend fun libraryItems(filter: MediaType?): List<MediaItem> = withContext(Dispatchers.IO) {
         val feed = syncManager.feedItems.value
@@ -52,6 +60,15 @@ class MegaflixLibraryBuilder @Inject constructor(
                 if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
                     Triple(item.tmdbId, item.season!!, item.episode!!) to rec.localFilePath
                 else null
+            }.toMap()
+
+        // Refresh the movie-path cache from ALL downloaded movie rows.
+        moviePathCache = feed
+            .filter { typeOf(it) == MediaType.MOVIE }
+            .mapNotNull { item ->
+                val rec = records[item.id]
+                if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
+                    item.tmdbId to rec.localFilePath else null
             }.toMap()
 
         val wanted = feed.filter { filter == null || typeOf(it) == filter }
