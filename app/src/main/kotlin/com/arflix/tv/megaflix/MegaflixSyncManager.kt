@@ -1,7 +1,9 @@
 package com.arflix.tv.megaflix
 
+import android.content.Context
 import com.arflix.tv.data.model.DownloadStatus
 import com.arflix.tv.util.Constants
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +15,7 @@ data class SyncOutcome(val total: Int, val ready: Int, val comingSoon: Int, val 
 
 @Singleton
 class MegaflixSyncManager @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val feedApi: MegaflixFeedApi,
     private val store: DownloadStateStore,
     private val driveManager: DriveManager
@@ -46,6 +49,14 @@ class MegaflixSyncManager @Inject constructor(
         }
 
         runCatching { feedApi.getRev(token).rev }.getOrNull()?.let { store.setRev(it) }
+
+        // Kick the download service if anything is queued and we can write to the drive.
+        val hasQueued = plan.upserts.any {
+            it.status == DownloadStatus.COMING_SOON || it.status == DownloadStatus.FAILED
+        }
+        if (hasQueued && StoragePermission.hasAllFilesAccess()) {
+            runCatching { DownloadService.start(context) }
+        }
 
         val ready = plan.upserts.count { it.status == DownloadStatus.READY }
         val coming = plan.upserts.count { it.status == DownloadStatus.COMING_SOON }

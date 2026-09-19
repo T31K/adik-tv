@@ -23,7 +23,7 @@ class MegaflixSyncManagerTest {
         coEvery { store.all() } returns emptyMap()
         coEvery { drive.findPlayableFile(any()) } returns null
 
-        val mgr = MegaflixSyncManager(api, store, drive)
+        val mgr = MegaflixSyncManager(mockk(relaxed = true), api, store, drive)
         val outcome = mgr.sync().getOrThrow()
 
         assertThat(outcome.total).isEqualTo(1)
@@ -37,7 +37,7 @@ class MegaflixSyncManagerTest {
     fun revChangedTrueWhenServerDiffers() = runTest {
         coEvery { api.getRev(any()) } returns RevResponseDto("2:t")
         coEvery { store.getRev() } returns "1:t"
-        val mgr = MegaflixSyncManager(api, store, drive)
+        val mgr = MegaflixSyncManager(mockk(relaxed = true), api, store, drive)
         assertThat(mgr.revChanged()).isTrue()
     }
 
@@ -45,7 +45,7 @@ class MegaflixSyncManagerTest {
     fun revChangedFalseWhenSame() = runTest {
         coEvery { api.getRev(any()) } returns RevResponseDto("1:t")
         coEvery { store.getRev() } returns "1:t"
-        val mgr = MegaflixSyncManager(api, store, drive)
+        val mgr = MegaflixSyncManager(mockk(relaxed = true), api, store, drive)
         assertThat(mgr.revChanged()).isFalse()
     }
 }
