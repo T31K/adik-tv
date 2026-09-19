@@ -50,9 +50,14 @@ class MegaflixSyncManager @Inject constructor(
 
         runCatching { feedApi.getRev(token).rev }.getOrNull()?.let { store.setRev(it) }
 
-        // Kick the download service if anything is queued and we can write to the drive.
-        val hasQueued = plan.upserts.any {
-            it.status == DownloadStatus.COMING_SOON || it.status == DownloadStatus.FAILED
+        // Kick the download service if ANYTHING in the store is still pending —
+        // not just this sync's upserts. A service killed mid-download leaves
+        // records in DOWNLOADING/COMING_SOON/FAILED; without this, they froze
+        // until the feed happened to change again.
+        val hasQueued = store.all().values.any {
+            it.status == DownloadStatus.COMING_SOON ||
+                it.status == DownloadStatus.FAILED ||
+                it.status == DownloadStatus.DOWNLOADING
         }
         if (hasQueued && StoragePermission.hasAllFilesAccess()) {
             runCatching { DownloadService.start(context) }

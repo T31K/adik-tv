@@ -26,19 +26,28 @@ import javax.inject.Inject
 class DownloadService : Service() {
     @Inject lateinit var downloadManager: MegaflixDownloadManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // One drain at a time: repeated onStartCommand (every sync kicks us, and
+    // START_STICKY restarts) must never race a second drain that would re-pick
+    // the item the first one is actively downloading.
+    private val draining = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification("Syncing library…"))
-        scope.launch {
-            try {
-                downloadManager.drain()
-            } finally {
-                stopSelf()
+        if (draining.compareAndSet(false, true)) {
+            scope.launch {
+                try {
+                    downloadManager.drain()
+                } finally {
+                    draining.set(false)
+                    stopSelf()
+                }
             }
         }
-        return START_NOT_STICKY
+        // STICKY: if the system kills us mid-drain (RAM pressure while another
+        // app is foreground), restart and resume the interrupted download.
+        return START_STICKY
     }
 
     override fun onDestroy() {
