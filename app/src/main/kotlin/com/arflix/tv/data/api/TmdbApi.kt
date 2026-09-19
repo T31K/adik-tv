@@ -281,6 +281,7 @@ data class TmdbMovieDetails(
     val runtime: Int? = null,
     val budget: Long = 0,
     val genres: List<TmdbGenre> = emptyList(),
+    @SerializedName("production_companies") val productionCompanies: List<TmdbCompany> = emptyList(),
     val status: String? = null,
     val adult: Boolean = false,
     @SerializedName("belongs_to_collection") val belongsToCollection: TmdbCollectionRef? = null,
@@ -366,6 +367,7 @@ data class TmdbContentRatingResult(
 )
 
 data class TmdbGenre(val id: Int = 0, val name: String = "")
+data class TmdbCompany(val id: Int = 0, val name: String = "")
 data class TmdbCreditsResponse(val id: Int = 0, val cast: List<TmdbCastMember> = emptyList(), val crew: List<TmdbCrewMember> = emptyList())
 data class TmdbCastMember(val id: Int = 0, val name: String = "", val character: String? = null, @SerializedName("profile_path") val profilePath: String? = null, val order: Int = 0)
 data class TmdbCrewMember(val id: Int = 0, val name: String = "", val job: String = "", @SerializedName("profile_path") val profilePath: String? = null, val department: String = "")

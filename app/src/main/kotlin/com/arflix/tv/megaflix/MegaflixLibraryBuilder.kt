@@ -130,6 +130,7 @@ class MegaflixLibraryBuilder @Inject constructor(
                 backdrop = d.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
                 originalLanguage = d.originalLanguage,
                 genreIds = d.genres.map { it.id },
+                companyIds = d.productionCompanies.map { it.id },
                 mediaType = MediaType.MOVIE
             )
         }.getOrElse {

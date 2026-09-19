@@ -1955,6 +1955,11 @@ class MediaRepository @Inject constructor(
                 val g = catalog.id.removePrefix("cat_g_").toIntOrNull()
                 all.filter { g != null && it.genreIds.contains(g) }.take(maxItems)
             }
+            catalog.id.startsWith("cat_co_") -> {
+                // Studio rows: dash-separated TMDB production-company ids.
+                val ids = catalog.id.removePrefix("cat_co_").split("-").mapNotNull { it.toIntOrNull() }.toSet()
+                all.filter { item -> item.companyIds.any { it in ids } }.take(maxItems)
+            }
             else -> all.take(maxItems)
         }
         return if (items.isEmpty()) null else Category(catalog.id, catalog.title, items)

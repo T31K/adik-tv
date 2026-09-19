@@ -80,6 +80,8 @@ data class MediaItem(
     // non-library items — search results, TMDB rows — render as normal playable cards).
     val downloadStatus: DownloadStatus = DownloadStatus.READY,
     val downloadProgress: Float = 0f,
+    // Megaflix: TMDB production-company ids, for studio rows (Netflix/Disney/…).
+    val companyIds: List<Int> = emptyList(),
 ) : Serializable
 
 enum class MediaType {
