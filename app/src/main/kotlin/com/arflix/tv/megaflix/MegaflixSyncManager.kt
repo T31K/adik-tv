@@ -75,14 +75,13 @@ class MegaflixSyncManager @Inject constructor(
         return out
     }
 
-    /** Deletes an item's folder, but only inside the drive's Megaflix/ tree (safety guard). */
+    /** Deletes an item's flat file, but only inside the drive's Megaflix/ folder (safety guard). */
     private fun deleteFilesFor(ids: Collection<String>, existing: Map<String, DownloadRecord>) {
-        val root = driveManager.driveRoot() ?: return
-        val megaflixTree = File(root, "Megaflix").absolutePath
+        val mediaDir = driveManager.mediaDir()?.absolutePath ?: return
         ids.forEach { id ->
             val filePath = existing[id]?.localFilePath ?: return@forEach
-            val dir = File(filePath).parentFile ?: return@forEach
-            if (dir.absolutePath.startsWith(megaflixTree)) dir.deleteRecursively()
+            val f = File(filePath)
+            if (f.absolutePath.startsWith(mediaDir)) f.delete()
         }
     }
 }

@@ -297,8 +297,11 @@ fun DetailsScreen(
             tmdbEpisode = tmdbEpisode
         )
         viewModel.recordPlayedEpisode(mediaId, identity)
-        // Megaflix: local item (incl. TV episodes) → play the bundled/local clip directly.
-        val localUri = uiState.item?.localUri
+        // Megaflix: resolve the specific episode's flat file (series), falling back to the
+        // show/movie-level localUri. `identity` carries the TMDB season/episode coordinates.
+        val episodeLocalPath = if (mediaType == MediaType.TV)
+            viewModel.megaflixEpisodePath(identity?.tmdbSeason, identity?.tmdbEpisode) else null
+        val localUri = episodeLocalPath ?: uiState.item?.localUri
         onNavigateToPlayer(
             mediaType,
             mediaId,

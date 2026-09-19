@@ -38,18 +38,21 @@ class DriveManager @Inject constructor(
         return dirs.getOrNull(0)?.let { volumeRootOf(it) }
     }
 
-    fun itemDir(relativePath: String): File? {
+    /** The single flat folder that holds every video file: <drive>/Megaflix/. */
+    fun mediaDir(): File? {
         val root = driveRoot() ?: return null
-        return File(root, relativePath)
+        return File(root, MEDIA_DIR)
     }
 
-    fun findPlayableFile(relativePath: String): File? {
-        val dir = itemDir(relativePath) ?: return null
-        if (!dir.isDirectory) return null
-        val videos = dir.walkTopDown().filter { it.isFile && isVideoFile(it.name) }.toList()
-            .sortedByDescending { it.length() }
-        return pickPlayable(videos)
+    /** Resolves a feed filename to its file in the flat media folder (may not exist). */
+    fun fileFor(fileName: String): File? {
+        val dir = mediaDir() ?: return null
+        return File(dir, fileName)
     }
+
+    /** Flat model: the feed `path` IS the filename. Returns it if present and a video. */
+    fun findPlayableFile(fileName: String): File? =
+        fileFor(fileName)?.takeIf { it.isFile && isVideoFile(it.name) }
 
     private fun volumeRootOf(appDir: File): File {
         // appDir looks like /storage/XXXX-XXXX/Android/data/<pkg>/files — climb to
@@ -60,14 +63,13 @@ class DriveManager @Inject constructor(
     }
 
     companion object {
+        /** Single flat folder on the drive that holds all Megaflix video files. */
+        const val MEDIA_DIR = "Megaflix"
         private val VIDEO_EXTS = setOf("mp4", "mkv", "avi", "mov", "m4v", "webm", "ts", "wmv", "flv")
 
         fun isVideoFile(name: String): Boolean {
             val ext = name.substringAfterLast('.', "").lowercase()
             return ext in VIDEO_EXTS
         }
-
-        /** Returns the first video file in the (caller-sorted) list, or null if none. */
-        fun pickPlayable(files: List<File>): File? = files.firstOrNull { isVideoFile(it.name) }
     }
 }

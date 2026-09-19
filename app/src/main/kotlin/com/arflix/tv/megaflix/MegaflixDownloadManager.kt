@@ -2,6 +2,7 @@ package com.arflix.tv.megaflix
 
 import com.arflix.tv.data.model.DownloadStatus
 import kotlinx.coroutines.runBlocking
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,12 +18,14 @@ class MegaflixDownloadManager @Inject constructor(
         val records = store.all()
         val id = DownloadQueue.nextToDownload(records) ?: return false
         val feedItem = syncManager.feedItems.value.firstOrNull { it.id == id } ?: return false
-        val saveDir = driveManager.itemDir(feedItem.path) ?: return false
+        // Flat model: download into the single Megaflix/ folder, then rename to the exact feed filename.
+        val saveDir = driveManager.mediaDir() ?: return false
+        saveDir.mkdirs()
 
         store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes)))
         return try {
             var lastPersisted = 0f
-            val file = engine.download(feedItem.link, saveDir) { p ->
+            val downloaded = engine.download(feedItem.link, saveDir) { p ->
                 // Throttle DataStore writes: persist at most every ~1% (and at completion).
                 if (p - lastPersisted >= 0.01f || p >= 1f) {
                     lastPersisted = p
@@ -31,7 +34,10 @@ class MegaflixDownloadManager @Inject constructor(
                     }
                 }
             }
-            store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, file.absolutePath, 1f, feedItem.sizeBytes)))
+            // Rename the torrent's video file to the exact feed filename (feedItem.path).
+            val target = File(saveDir, feedItem.path)
+            val finalFile = if (downloaded.absolutePath != target.absolutePath && downloaded.renameTo(target)) target else downloaded
+            store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes)))
             true
         } catch (t: Throwable) {
             store.putAll(listOf(DownloadRecord(id, DownloadStatus.FAILED, null, 0f, feedItem.sizeBytes)))

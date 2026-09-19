@@ -17,6 +17,7 @@ data class FeedItemDto(
     @SerializedName("type") val type: String = "movie",
     @SerializedName("tmdbId") val tmdbId: Int = 0,
     @SerializedName("season") val season: Int? = null,
+    @SerializedName("episode") val episode: Int? = null,
     @SerializedName("title") val title: String = "",
     @SerializedName("description") val description: String? = null,
     @SerializedName("link") val link: String = "",

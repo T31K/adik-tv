@@ -1951,6 +1951,10 @@ class MediaRepository @Inject constructor(
         return if (items.isEmpty()) null else Category(catalog.id, catalog.title, items)
     }
 
+    /** Megaflix: per-episode local file for a series (flat model). Null if not downloaded. */
+    fun megaflixEpisodePath(tmdbId: Int, season: Int, episode: Int): String? =
+        megaflixLibrary.cachedEpisodePath(tmdbId, season, episode)
+
     suspend fun loadCustomCatalog(catalog: CatalogConfig, maxItems: Int = 40): Category? = coroutineScope {
         if (catalog.sourceType == CatalogSourceType.LOCAL) {
             return@coroutineScope loadLocalCatalog(catalog, maxItems)

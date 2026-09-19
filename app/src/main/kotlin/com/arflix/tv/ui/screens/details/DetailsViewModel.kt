@@ -1297,6 +1297,12 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
+    /** Megaflix: local file for a specific episode of this show (flat model). Null if not downloaded. */
+    fun megaflixEpisodePath(tmdbSeason: Int?, tmdbEpisode: Int?): String? {
+        if (tmdbSeason == null || tmdbEpisode == null) return null
+        return mediaRepository.megaflixEpisodePath(currentMediaId, tmdbSeason, tmdbEpisode)
+    }
+
     fun resolveEpisodeIdentity(
         displaySeason: Int?,
         displayEpisode: Int?,
