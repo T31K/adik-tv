@@ -252,3 +252,12 @@
 -keep class com.arflix.tv.util.Result$* { *; }
 -keep class com.arflix.tv.util.UiState { *; }
 -keep class com.arflix.tv.util.UiState$* { *; }
+
+# ============================================
+# Megaflix/ADIK: libtorrent4j (SWIG/JNI) — the native .so calls these methods
+# by name (SwigDirector_*, native callbacks), so R8 must not strip/rename them.
+# ============================================
+-keep class org.libtorrent4j.** { *; }
+-keep class org.libtorrent4j.swig.** { *; }
+-keepclassmembers class org.libtorrent4j.swig.** { *; }
+-dontwarn org.libtorrent4j.**
