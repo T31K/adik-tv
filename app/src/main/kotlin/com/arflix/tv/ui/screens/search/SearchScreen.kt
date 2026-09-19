@@ -158,8 +158,9 @@ fun SearchScreen(
     val isCompactHeight = configuration.screenHeightDp <= 780
     val isTouchDevice = LocalDeviceType.current.isTouchDevice()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    // ADIK: bigger search bar now that the filter row is gone.
     val searchBarWidth = if (isTouchDevice) configuration.screenWidthDp.dp - 32.dp
-        else (configuration.screenWidthDp.dp * 0.48f).coerceIn(460.dp, 680.dp)
+        else (configuration.screenWidthDp.dp * 0.65f).coerceIn(560.dp, 900.dp)
 
     val hasSearchResults = uiState.movieResults.isNotEmpty() || uiState.tvResults.isNotEmpty() || uiState.personResults.isNotEmpty()
     val hasAiResults = uiState.isAiSearch && uiState.aiResults.isNotEmpty()
@@ -370,7 +371,11 @@ fun SearchScreen(
         searchEditRequestNonce++
     }
 
-    val showFilters = uiState.query.isEmpty()
+    // ADIK: discover filter bar (Movies/TV/Anime tabs + Genre/Sort/Rating/Year/
+    // Age/Language chips) removed — the local library is small and curated, so
+    // search + trending rows are the whole screen. All zone transitions already
+    // fall back to SEARCH_INPUT/RESULTS when this is false.
+    val showFilters = false
     // Rows while nothing is filtered, one endlessly paging grid from the first filter on (H9).
     val showGrid = showFilters && uiState.hasDiscoverFilters
     val gridSlotCount = gridItems.size + if ((uiState.gridLoadFailed || uiState.gridScanPaused)) 1 else 0
@@ -989,7 +994,7 @@ private fun SearchInputBar(
     ArvioFocusableSurface(
         modifier = Modifier
             .width(searchBarWidth)
-            .height(54.dp)
+            .height(66.dp)
             .onPreviewKeyEvent { event ->
                 if (!isFocused || isEditing) return@onPreviewKeyEvent false
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -1020,13 +1025,13 @@ private fun SearchInputBar(
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Search, null, tint = if (isFocused) Color.White else TextSecondary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
+            Icon(Icons.Default.Search, null, tint = if (isFocused) Color.White else TextSecondary, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(14.dp))
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 readOnly = !isEditing,
-                textStyle = ArflixTypography.body.copy(color = TextPrimary, fontSize = 17.sp),
+                textStyle = ArflixTypography.body.copy(color = TextPrimary, fontSize = 20.sp),
                 cursorBrush = SolidColor(Color.White),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -1039,7 +1044,7 @@ private fun SearchInputBar(
                     if (query.isEmpty()) {
                         Text(
                             stringResource(R.string.search),
-                            style = ArflixTypography.body.copy(fontSize = 17.sp),
+                            style = ArflixTypography.body.copy(fontSize = 20.sp),
                             color = Color.White.copy(alpha = 0.32f)
                         )
                     }
