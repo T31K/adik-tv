@@ -110,6 +110,7 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - **v0.1.2** — local playback fix (`file://` URIs) — **playback works on real TV.**
 - **v0.1.3** — R8 keep-rules for libtorrent4j (fixed download crash) — **downloads work on real TV;** splash/profile logos.
 - **v0.1.4** — dynamic category rows, TV in nav, no "View all", playback spinner, cast not clickable, hover/select sounds; **fix: per-item download folders (no more scrambled filenames).**
+- **v0.1.5** — studio rows (Netflix Originals / Disney & Pixar / HBO / Max) filtered by TMDB production company. Row id `cat_co_<id-id-…>` (dash-separated company ids); `MediaItem.companyIds` from TMDB `production_companies`. Rows only render when they have matching movies.
 
 (Predecessor Megaflix builds shipped from `T31K/megaflix-tv` as com.megaflix.tv2 — now superseded.)
 
