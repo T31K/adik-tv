@@ -202,7 +202,6 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.srcDir("src/main/tdlib-java")
             // Vendored media3 1.9.0 Matroska extractor with Dolby Vision P7 sample hooks
             // (see dvmkv/package-info.java for the re-vendoring procedure on media3 bumps).
             java.srcDir("src/main/dvmkv-java")
@@ -407,11 +406,6 @@ ksp {
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.0.4")
     implementation("io.github.jan-tennert.supabase:gotrue-kt:2.0.4")
     implementation("io.ktor:ktor-client-android:2.3.7")
-    // Ktor server modules used by Telegram streaming proxy
-    implementation("io.ktor:ktor-server-core:2.3.7")
-    implementation("io.ktor:ktor-server-cio:2.3.7")
-    implementation("io.ktor:ktor-server-call-logging:2.3.7")
-    implementation("io.ktor:ktor-server-host-common:2.3.7")
 
     // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")

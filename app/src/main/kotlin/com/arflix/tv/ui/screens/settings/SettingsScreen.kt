@@ -462,7 +462,6 @@ fun SettingsScreen(
     onNavigateToSearch: () -> Unit = {},
     onNavigateToTv: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
-    onNavigateToTelegramSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
@@ -627,7 +626,7 @@ fun SettingsScreen(
             "catalogs" -> uiState.catalogs.size + 1 // Add + Import + catalogs
             "stremio" -> stremioAddons.size + 1 // rows + refresh + add button
             "plugins" -> pluginsMaxIndex
-            "accounts" -> 16 // Includes About & Credits.
+            "accounts" -> 15 // Includes About & Credits.
             else -> 0
         }
     }
@@ -1528,8 +1527,7 @@ fun SettingsScreen(
                                                         !uiState.trackingWriteToSimkl
                                                     )
                                                 }
-                                                9 -> onNavigateToTelegramSettings()
-                                                10 -> {
+                                                9 -> {
                                                     if (com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.isSupported) {
                                                         if (com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.isLoggedInFlow.value) {
                                                             com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.logout()
@@ -1538,18 +1536,18 @@ fun SettingsScreen(
                                                         }
                                                     }
                                                 }
-                                                11 -> viewModel.forceCloudSyncNow()
-                                                12 -> {
+                                                10 -> viewModel.forceCloudSyncNow()
+                                                11 -> {
                                                     if (uiState.updateStatus is com.arflix.tv.updater.UpdateStatus.ReadyToInstall) {
                                                         viewModel.installAppUpdateOrRequestPermission()
                                                     } else {
                                                         viewModel.checkForAppUpdates(force = true, showNoUpdateFeedback = true)
                                                     }
                                                 }
-                                                13 -> viewModel.setDiagnosticsSharingEnabled(!uiState.diagnosticsSharingEnabled)
-                                                14 -> openExternalUrl(context, PRIVACY_POLICY_URL)
-                                                15 -> openExternalUrl(context, ACCOUNT_DELETION_URL)
-                                                16 -> showCredits = true
+                                                12 -> viewModel.setDiagnosticsSharingEnabled(!uiState.diagnosticsSharingEnabled)
+                                                13 -> openExternalUrl(context, PRIVACY_POLICY_URL)
+                                                14 -> openExternalUrl(context, ACCOUNT_DELETION_URL)
+                                                15 -> showCredits = true
                                             }
                                         }
                                         "plugins" -> {
@@ -1632,7 +1630,6 @@ fun SettingsScreen(
                 },
                 onAddCustomAddonClick = { showCustomAddonInput = true },
                 openCustomUserAgentDialog = { showCustomUserAgentDialog = true },
-                onNavigateToTelegram = onNavigateToTelegramSettings,
                 onDisconnectCloud = { showCloudDisconnectConfirm = true },
                 onDisconnectTrakt = { showTraktDisconnectConfirm = true }
             )
@@ -2156,7 +2153,6 @@ fun SettingsScreen(
                             onOpenPrivacy = { openExternalUrl(context, PRIVACY_POLICY_URL) },
                             onOpenCredits = { showCredits = true },
                             onOpenDataDeletion = { openExternalUrl(context, ACCOUNT_DELETION_URL) },
-                            onNavigateToTelegram = onNavigateToTelegramSettings
                         )
                     }
                   }
@@ -4244,7 +4240,6 @@ private fun MobileSettingsLayout(
     onConnectPlexHomeServerClick: () -> Unit,
     onAddCustomAddonClick: () -> Unit,
     openCustomUserAgentDialog: () -> Unit = {},
-    onNavigateToTelegram: () -> Unit = {},
     onDisconnectCloud: () -> Unit = {},
     onDisconnectTrakt: () -> Unit = {}
 ) {
@@ -4309,7 +4304,6 @@ private fun MobileSettingsLayout(
                 openSecondarySubtitlePicker = openSecondarySubtitlePicker,
                 openAudioLanguagePicker = openAudioLanguagePicker,
                 onSwitchProfile = onSwitchProfile,
-                onNavigateToTelegram = onNavigateToTelegram
             )
         }
 
@@ -4414,7 +4408,6 @@ private fun MobileSettingsMainPage(
     openSecondarySubtitlePicker: () -> Unit = {},
     openAudioLanguagePicker: () -> Unit,
     onSwitchProfile: () -> Unit,
-    onNavigateToTelegram: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showCredits by remember { mutableStateOf(false) }
@@ -4521,14 +4514,6 @@ private fun MobileSettingsMainPage(
                     },
                     isFocused = false,
                     onClick = { onNavigate("Tracking Integrations") }
-                )
-                MobileSettingsRow(
-                    iconRes = R.drawable.ic_telegram,
-                    title = "Telegram",
-                    value = "",
-                    isExternalLink = false,
-                    isFocused = false,
-                    onClick = { onNavigate("Telegram") }
                 )
                 val isDiscordLoggedIn by com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
                 val discordUsername by com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.usernameFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -5133,12 +5118,6 @@ private fun MobileSettingsSubPage(
                     stremioAddons = stremioAddons,
                     onSwitchProfile = onSwitchProfile,
                     context = LocalContext.current
-                )
-            }
-            "Telegram" -> {
-                com.arflix.tv.ui.screens.settings.telegram.TelegramSettingsScreen(
-                    onBack = { onNavigate("MAIN") },
-                    showHeader = false
                 )
             }
         }
@@ -9264,7 +9243,6 @@ private fun AccountsSettings(
     onOpenPrivacy: () -> Unit,
     onOpenDataDeletion: () -> Unit,
     onOpenCredits: () -> Unit,
-    onNavigateToTelegram: () -> Unit = {}
 ) {
     Column {
         if (LocalDeviceType.current.isTouchDevice()) {
@@ -9415,18 +9393,6 @@ private fun AccountsSettings(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Telegram
-        SettingsActionRow(
-            title = "Telegram",
-            description = stringResource(R.string.settings_telegram_desc),
-            actionLabel = stringResource(R.string.settings_badge_open),
-            isFocused = focusedIndex == 9,
-            onClick = onNavigateToTelegram,
-            modifier = Modifier.settingsFocusSlot(9)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Discord RPC
         val context = LocalContext.current
         val isDiscordLoggedIn by com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
@@ -9444,14 +9410,14 @@ private fun AccountsSettings(
             isEnabled = isDiscordSupported,
             authCode = null,
             authUrl = null,
-            isFocused = focusedIndex == 10,
+            isFocused = focusedIndex == 9,
             onConnect = {
                 com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.login(context)
             },
             onDisconnect = {
                 com.arflix.tv.ui.screens.details.discord.DiscordRpcManager.logout()
             },
-            modifier = Modifier.settingsFocusSlot(10)
+            modifier = Modifier.settingsFocusSlot(9)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -9468,9 +9434,9 @@ private fun AccountsSettings(
                 stringResource(R.string.settings_signin_to_force_sync)
             },
             actionLabel = if (isForceCloudSyncing) stringResource(R.string.settings_badge_syncing) else stringResource(R.string.settings_badge_sync),
-            isFocused = focusedIndex == 11,
+            isFocused = focusedIndex == 10,
             onClick = { if (!isForceCloudSyncing) onForceCloudSync() },
-            modifier = Modifier.settingsFocusSlot(11)
+            modifier = Modifier.settingsFocusSlot(10)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -9492,11 +9458,11 @@ private fun AccountsSettings(
                 updateStatus is com.arflix.tv.updater.UpdateStatus.UpdateAvailable -> stringResource(R.string.settings_badge_update)
                 else -> stringResource(R.string.settings_badge_check)
             },
-            isFocused = focusedIndex == 12,
+            isFocused = focusedIndex == 11,
             onClick = {
                 if (updateStatus is com.arflix.tv.updater.UpdateStatus.ReadyToInstall) onInstallUpdate() else onCheckUpdates()
             },
-            modifier = Modifier.settingsFocusSlot(12)
+            modifier = Modifier.settingsFocusSlot(11)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -9505,9 +9471,9 @@ private fun AccountsSettings(
             title = stringResource(R.string.settings_diagnostics_sharing),
             subtitle = stringResource(R.string.settings_diagnostics_sharing_desc),
             isEnabled = diagnosticsSharingEnabled,
-            isFocused = focusedIndex == 13,
+            isFocused = focusedIndex == 12,
             onToggle = onDiagnosticsSharingToggle,
-            modifier = Modifier.settingsFocusSlot(13)
+            modifier = Modifier.settingsFocusSlot(12)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -9516,9 +9482,9 @@ private fun AccountsSettings(
             title = stringResource(R.string.settings_privacy_policy),
             description = stringResource(R.string.settings_privacy_policy_desc),
             actionLabel = stringResource(R.string.settings_badge_open),
-            isFocused = focusedIndex == 14,
+            isFocused = focusedIndex == 13,
             onClick = onOpenPrivacy,
-            modifier = Modifier.settingsFocusSlot(14)
+            modifier = Modifier.settingsFocusSlot(13)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -9527,18 +9493,18 @@ private fun AccountsSettings(
             title = stringResource(R.string.settings_account_data_deletion),
             description = stringResource(R.string.settings_account_data_deletion_desc),
             actionLabel = stringResource(R.string.settings_badge_open),
-            isFocused = focusedIndex == 15,
+            isFocused = focusedIndex == 14,
             onClick = onOpenDataDeletion,
-            modifier = Modifier.settingsFocusSlot(15)
+            modifier = Modifier.settingsFocusSlot(14)
         )
         Spacer(modifier = Modifier.height(16.dp))
         SettingsActionRow(
             title = stringResource(R.string.about_credits),
             description = stringResource(R.string.about_credits_description),
             actionLabel = stringResource(R.string.settings_badge_open),
-            isFocused = focusedIndex == 16,
+            isFocused = focusedIndex == 15,
             onClick = onOpenCredits,
-            modifier = Modifier.settingsFocusSlot(16)
+            modifier = Modifier.settingsFocusSlot(15)
         )
     }
 }

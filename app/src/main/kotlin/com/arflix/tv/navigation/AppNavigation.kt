@@ -30,7 +30,6 @@ import com.arflix.tv.ui.screens.player.PlayerScreen
 import com.arflix.tv.ui.screens.collections.CollectionDetailsScreen
 import com.arflix.tv.ui.screens.search.SearchScreen
 import com.arflix.tv.ui.screens.settings.SettingsScreen
-import com.arflix.tv.ui.screens.settings.telegram.TelegramSettingsScreen
 import com.arflix.tv.ui.screens.tv.live.LiveTvScreen
 import com.arflix.tv.ui.screens.watchlist.WatchlistScreen
 import com.arflix.tv.ui.screens.profile.ProfileSelectionScreen
@@ -71,7 +70,6 @@ sealed class Screen(val route: String) {
             return if (params.isNotEmpty()) "$base?${params.joinToString("&")}" else base
         }
     }
-    data object TelegramSettings : Screen("telegram_settings")
     data object ProfileSelection : Screen("profile_selection")
 
     data object Details : Screen("details/{mediaType}/{mediaId}?initialSeason={initialSeason}&initialEpisode={initialEpisode}") {
@@ -364,18 +362,12 @@ fun AppNavigation(
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
                 onNavigateToTv = { navigateTopLevel(Screen.Tv.createRoute()) },
                 onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
-                onNavigateToTelegramSettings = { navController.navigate(Screen.TelegramSettings.route) },
                 onSwitchProfile = {
                     onSwitchProfile()
                     navController.navigateToProfileSelection()
                 },
                 onBack = { navController.popBackStack() }
             )
-        }
-
-        // Telegram settings screen
-        composable(Screen.TelegramSettings.route) {
-            TelegramSettingsScreen(onBack = { navController.popBackStack() })
         }
 
         // Profile selection screen

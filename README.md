@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/images/adik_logo.png" alt="ADIK TV" width="260" />
+</div>
+
 # ADIK TV
 
 A private, family-friendly media hub for Android TV. Movies and shows are
@@ -20,6 +24,20 @@ Built as a heavily trimmed fork of [ARVIO](https://github.com/ProdigyV21/ARVIO)
    Switch from the "Who's watching?" screen or the avatar dropdown on Home.
 5. Updates ship as GitHub releases; Settings → App update installs them
    in-app (no adb needed).
+
+## Screenshots
+
+| Who's watching? | Home |
+|---|---|
+| ![Profiles](docs/images/profiles.png) | ![Home](docs/images/home.png) |
+
+| Profile switcher | Search |
+|---|---|
+| ![Profile switcher](docs/images/profile_switcher.png) | ![Search](docs/images/search.png) |
+
+**Netflix-style player** — back + centered title up top, rewind/play/forward in the middle, Episodes · Subtitles · Next episode under the seek bar:
+
+![Player](docs/images/player.png)
 
 ## Project layout
 
