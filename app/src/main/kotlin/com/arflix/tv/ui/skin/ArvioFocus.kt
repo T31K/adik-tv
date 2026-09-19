@@ -119,6 +119,7 @@ fun Modifier.arvioFocusable(
             val focusedNow = state.isFocused
             if (focusedNow != isFocused) {
                 isFocused = focusedNow
+                if (focusedNow) com.arflix.tv.util.NavSound.play() // ADIK: hover sound
                 onFocusChanged(focusedNow)
             }
         }

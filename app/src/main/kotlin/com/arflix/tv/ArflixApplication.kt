@@ -93,6 +93,7 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         com.arflix.tv.network.initializeNetworkPlatform(this)
         super.onCreate()
         instance = this
+        com.arflix.tv.util.NavSound.init(this) // ADIK: preload UI hover sound
 
         // Initialize global DNS provider and user agent from DataStore before network calls.
         appScope.launch(Dispatchers.IO) {
