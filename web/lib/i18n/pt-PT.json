@@ -1,9 +1,0 @@
-{
-  "Play {value0}": "Reproduzir {value0}",
-  "Collection": "Coleção",
-  "Watching": "A ver",
-  "Completed": "Concluídos",
-  "Dropped": "Abandonados",
-  "Channel categories": "Categorias de canais",
-  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: use o endereço compatível com Jellyfin. Perfil opcional: username#ProfileName. Perfil protegido: password#PIN."
-}

@@ -1,8 +1,0 @@
-{
-  "Play {value0}": "{value0} 재생",
-  "Collection": "컬렉션",
-  "Watching": "시청 중",
-  "Completed": "시청 완료",
-  "Dropped": "시청 중단",
-  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: Jellyfin 호환 주소를 사용하세요. 선택적 프로필: username#ProfileName. 보호된 프로필: password#PIN."
-}

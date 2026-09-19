@@ -1,8 +1,0 @@
-{
-  "Play {value0}": "Spill av {value0}",
-  "Collection": "Samling",
-  "Watching": "Ser på",
-  "Completed": "Fullført",
-  "Dropped": "Droppet",
-  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: bruk den Jellyfin-kompatible adressen. Valgfri profil: username#ProfileName. Beskyttet profil: password#PIN."
-}

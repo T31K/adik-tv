@@ -1,8 +1,0 @@
-{
-  "Play {value0}": "{value0} चलाएँ",
-  "Collection": "संग्रह",
-  "Watching": "देख रहे हैं",
-  "Completed": "पूर्ण",
-  "Dropped": "छोड़े गए",
-  "Silo: use the Jellyfin-compatible address. Optional profile: username#ProfileName. Protected profile: password#PIN.": "Silo: Jellyfin-संगत पता इस्तेमाल करें. वैकल्पिक प्रोफ़ाइल: username#ProfileName. सुरक्षित प्रोफ़ाइल: password#PIN."
-}
