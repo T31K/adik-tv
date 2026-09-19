@@ -222,6 +222,13 @@ class MainActivity : ComponentActivity() {
         pendingLauncherRequest = parseLauncherRequest(intent)
         pendingInstallPackUrl = parseInstallPackUrl(intent)
 
+        // ADIK: request "All files access" so we can read/write the USB drive.
+        // Fires on launch until granted (then skipped forever). Guarded so a TV
+        // without the settings screen doesn't crash — we just can't reach the drive there.
+        if (!com.arflix.tv.megaflix.StoragePermission.hasAllFilesAccess()) {
+            runCatching { startActivity(com.arflix.tv.megaflix.StoragePermission.requestIntent(this)) }
+        }
+
         val crashPrefs = getSharedPreferences("arvio_crash_store", Context.MODE_PRIVATE)
         if (crashPrefs.getBoolean("has_pending_crash_report", false)) {
             val crashId = crashPrefs.getString("last_crash_id", "N/A")
