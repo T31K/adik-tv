@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -225,13 +227,11 @@ fun ProfileSelectionScreen(
                     .offset(y = verticalCenterOffsetDp)
                     .graphicsLayer { alpha = backgroundAlpha }
             ) {
-                // Title
-                Text(
-                    text = "ADIK TV",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    letterSpacing = 6.sp
+                // ADIK: logo instead of the plain wordmark.
+                Image(
+                    painter = painterResource(id = R.drawable.adik_logo),
+                    contentDescription = "ADIK TV",
+                    modifier = Modifier.width(280.dp)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -343,6 +343,17 @@ fun ProfileSelectionScreen(
                     .offset(y = verticalCenterOffsetDp),
                 contentAlignment = Alignment.Center
             ) {
+                // ADIK: branded logo at the top during the loading transition.
+                Image(
+                    painter = painterResource(id = R.drawable.adik_logo),
+                    contentDescription = "ADIK TV",
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 48.dp)
+                        .width(220.dp)
+                        .graphicsLayer { alpha = transitionProgress }
+                )
+
                 // The enlarged profile card: centered directly at (0, 0)
                 Box(
                     modifier = Modifier

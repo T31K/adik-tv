@@ -520,43 +520,12 @@ fun ArvioLoadingScreen() {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(color = Color.Black)
-
-            val progress = reveal.value
-            val logoCenterY = center.y - 8.dp.toPx()
-            val baselineY = logoCenterY + 138.dp.toPx()
-
-            val halfWidth = 180.dp.toPx() * progress
-            val lineStartX = center.x - halfWidth
-            val lineEndX = center.x + halfWidth
-            drawLine(
-                color = Color(0xFF00F0D0).copy(alpha = 0.32f * progress),
-                start = Offset(lineStartX, baselineY),
-                end = Offset(lineEndX, baselineY),
-                strokeWidth = 1.6.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-
-            val sweepHalfWidth = 34.dp.toPx()
-            val sweepTravel = (halfWidth - sweepHalfWidth).coerceAtLeast(0f)
-            val sweepX = center.x + (sweep * sweepTravel)
-            drawLine(
-                color = Color.White.copy(alpha = 0.54f * progress),
-                start = Offset(sweepX - sweepHalfWidth, baselineY),
-                end = Offset(sweepX + sweepHalfWidth, baselineY),
-                strokeWidth = 1.2.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-        }
-
-        Text(
-            text = "ADIK TV",
-            color = Color.White,
-            fontSize = 44.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 6.sp,
+        // ADIK: splash logo (replaces the old wordmark text).
+        Image(
+            painter = painterResource(id = R.drawable.adik_logo),
+            contentDescription = "ADIK TV",
             modifier = Modifier
+                .fillMaxWidth(0.62f)
                 .padding(horizontal = 24.dp)
                 .graphicsLayer {
                     alpha = reveal.value * logoAlpha

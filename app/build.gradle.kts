@@ -37,8 +37,8 @@ android {
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         minSdk = 23
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
         buildConfigField("String", "GITHUB_OWNER", "\"T31K\"")
         buildConfigField("String", "GITHUB_REPO", "\"adik-tv\"")
         buildConfigField("Boolean", "FEATURE_PLUGINS_ENABLED", "false")
