@@ -149,6 +149,8 @@ data class AiKeyServerState(
 )
 
 data class SettingsUiState(
+    // ADIK: which family TV this is (Constants.MEGAFLIX_DEVICE_IDS); null = not set.
+    val megaflixDeviceId: String? = null,
     val defaultSubtitle: String = "Off",
     val subtitleOptions: List<String> = emptyList(),
     val defaultAudioLanguage: String = "Auto (Original)",
@@ -330,8 +332,19 @@ class SettingsViewModel @Inject constructor(
     private val syncProviderStore: com.arflix.tv.data.repository.sync.SyncProviderStore,
     private val watchHistoryRepository: com.arflix.tv.data.repository.WatchHistoryRepository,
     private val simklAuthManager: com.arflix.tv.data.repository.simkl.SimklAuthManager,
-    private val simklSyncService: com.arflix.tv.data.repository.simkl.SimklSyncService
+    private val simklSyncService: com.arflix.tv.data.repository.simkl.SimklSyncService,
+    private val megaflixStore: com.arflix.tv.megaflix.DownloadStateStore
 ) : ViewModel() {
+    /** ADIK: click-to-cycle through the family fleet ids (one-time setup per TV). */
+    fun cycleMegaflixDeviceId() {
+        viewModelScope.launch {
+            val ids = com.arflix.tv.util.Constants.MEGAFLIX_DEVICE_IDS
+            val next = ids[(ids.indexOf(_uiState.value.megaflixDeviceId) + 1).mod(ids.size)]
+            runCatching { megaflixStore.setDeviceId(next) }
+            _uiState.value = _uiState.value.copy(megaflixDeviceId = next)
+        }
+    }
+
     private fun visibleCatalogs(catalogs: List<CatalogConfig>): List<CatalogConfig> {
         return catalogs.filter { config ->
             when (config.kind) {
@@ -476,6 +489,11 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             diagnosticsSharingEnabled = DiagnosticsManager.isReportingEnabled(context)
         )
+        viewModelScope.launch {
+            runCatching { megaflixStore.getDeviceId() }.getOrNull()?.let { id ->
+                _uiState.value = _uiState.value.copy(megaflixDeviceId = id)
+            }
+        }
         loadSettings()
         observeProfileChanges()
         observeAddons()

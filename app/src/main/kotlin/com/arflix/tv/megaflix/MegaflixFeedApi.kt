@@ -8,16 +8,19 @@ interface MegaflixFeedApi {
     suspend fun getFeed(
         @Query("k") token: String,
         @Query("limit") limit: Int,
-        @Query("offset") offset: Int
+        @Query("offset") offset: Int,
+        @Query("d") deviceId: String? = null
     ): FeedResponseDto
 
     @GET("rev")
     suspend fun getRev(
-        @Query("k") token: String
+        @Query("k") token: String,
+        @Query("d") deviceId: String? = null
     ): RevResponseDto
 
     @GET("rows")
     suspend fun getRows(
-        @Query("k") token: String
+        @Query("k") token: String,
+        @Query("d") deviceId: String? = null
     ): RowsResponseDto
 }

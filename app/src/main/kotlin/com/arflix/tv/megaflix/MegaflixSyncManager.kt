@@ -28,7 +28,7 @@ class MegaflixSyncManager @Inject constructor(
 
     /** Returns true if the server's rev differs from the last one we synced. */
     suspend fun revChanged(): Boolean = runCatching {
-        feedApi.getRev(token).rev != store.getRev()
+        feedApi.getRev(token, store.getDeviceId()).rev != store.getRev()
     }.getOrDefault(false)
 
     suspend fun sync(): Result<SyncOutcome> = runCatching {
@@ -48,7 +48,7 @@ class MegaflixSyncManager @Inject constructor(
             store.remove(plan.removedIds)
         }
 
-        runCatching { feedApi.getRev(token).rev }.getOrNull()?.let { store.setRev(it) }
+        runCatching { feedApi.getRev(token, store.getDeviceId()).rev }.getOrNull()?.let { store.setRev(it) }
 
         // Kick the download service if ANYTHING in the store is still pending —
         // not just this sync's upserts. A service killed mid-download leaves
@@ -72,7 +72,7 @@ class MegaflixSyncManager @Inject constructor(
         val out = mutableListOf<FeedItemDto>()
         var offset = 0
         while (true) {
-            val page = feedApi.getFeed(token, pageSize, offset)
+            val page = feedApi.getFeed(token, pageSize, offset, store.getDeviceId())
             out += page.items
             offset += page.items.size
             if (page.items.size < pageSize || offset >= page.total) break

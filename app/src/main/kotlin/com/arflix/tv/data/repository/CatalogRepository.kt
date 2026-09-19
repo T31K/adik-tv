@@ -68,7 +68,8 @@ class CatalogRepository @Inject constructor(
     private val traktApi: TraktApi,
     private val okHttpClient: OkHttpClient,
     private val invalidationBus: CloudSyncInvalidationBus,
-    private val megaflixFeedApi: com.arflix.tv.megaflix.MegaflixFeedApi
+    private val megaflixFeedApi: com.arflix.tv.megaflix.MegaflixFeedApi,
+    private val megaflixStore: com.arflix.tv.megaflix.DownloadStateStore
 ) {
     private val bundledPreinstalledCatalogsById by lazy(LazyThreadSafetyMode.NONE) {
         MediaRepository.buildPreinstalledDefaults().associateBy { it.id }
@@ -210,7 +211,10 @@ class CatalogRepository @Inject constructor(
     private suspend fun localCatalogs(): List<CatalogConfig> {
         cachedRowCatalogs?.let { return it }
         val fetched = runCatching {
-            megaflixFeedApi.getRows(com.arflix.tv.util.Constants.MEGAFLIX_FEED_TOKEN).rows
+            megaflixFeedApi.getRows(
+                com.arflix.tv.util.Constants.MEGAFLIX_FEED_TOKEN,
+                megaflixStore.getDeviceId()
+            ).rows
                 .filter { it.id.isNotBlank() && it.title.isNotBlank() }
                 .map { CatalogConfig(id = it.id, title = it.title, sourceType = CatalogSourceType.LOCAL, isPreinstalled = false) }
         }.getOrNull()?.takeIf { it.isNotEmpty() }

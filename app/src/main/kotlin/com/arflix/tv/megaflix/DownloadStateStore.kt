@@ -55,4 +55,17 @@ class DownloadStateStore @Inject constructor(
 
     suspend fun getRev(): String? =
         context.downloadsDataStore.data.first()[revKey]
+
+    // Which family TV this is (see Constants.MEGAFLIX_DEVICE_IDS); set once
+    // per TV from Settings and sent as `d=` on every feed call.
+    private val deviceIdKey = stringPreferencesKey("device_id")
+
+    suspend fun setDeviceId(id: String?) {
+        context.downloadsDataStore.edit { prefs ->
+            if (id.isNullOrBlank()) prefs.remove(deviceIdKey) else prefs[deviceIdKey] = id
+        }
+    }
+
+    suspend fun getDeviceId(): String? =
+        context.downloadsDataStore.data.first()[deviceIdKey]
 }

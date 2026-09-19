@@ -626,7 +626,7 @@ fun SettingsScreen(
             "catalogs" -> uiState.catalogs.size + 1 // Add + Import + catalogs
             "stremio" -> stremioAddons.size + 1 // rows + refresh + add button
             "plugins" -> pluginsMaxIndex
-            "accounts" -> 15 // Includes About & Credits.
+            "accounts" -> 16 // Includes About & Credits + device id.
             else -> 0
         }
     }
@@ -1548,6 +1548,7 @@ fun SettingsScreen(
                                                 13 -> openExternalUrl(context, PRIVACY_POLICY_URL)
                                                 14 -> openExternalUrl(context, ACCOUNT_DELETION_URL)
                                                 15 -> showCredits = true
+                                                16 -> viewModel.cycleMegaflixDeviceId()
                                             }
                                         }
                                         "plugins" -> {
@@ -2153,6 +2154,8 @@ fun SettingsScreen(
                             onOpenPrivacy = { openExternalUrl(context, PRIVACY_POLICY_URL) },
                             onOpenCredits = { showCredits = true },
                             onOpenDataDeletion = { openExternalUrl(context, ACCOUNT_DELETION_URL) },
+                            megaflixDeviceId = uiState.megaflixDeviceId,
+                            onCycleDeviceId = { viewModel.cycleMegaflixDeviceId() },
                         )
                     }
                   }
@@ -9243,6 +9246,8 @@ private fun AccountsSettings(
     onOpenPrivacy: () -> Unit,
     onOpenDataDeletion: () -> Unit,
     onOpenCredits: () -> Unit,
+    megaflixDeviceId: String? = null,
+    onCycleDeviceId: () -> Unit = {},
 ) {
     Column {
         if (LocalDeviceType.current.isTouchDevice()) {
@@ -9505,6 +9510,17 @@ private fun AccountsSettings(
             isFocused = focusedIndex == 15,
             onClick = onOpenCredits,
             modifier = Modifier.settingsFocusSlot(15)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        // ADIK: which family TV this is. Click cycles through the fleet ids;
+        // sent as `d=` on feed calls and used to target remote assist later.
+        SettingsActionRow(
+            title = "Device ID",
+            description = megaflixDeviceId ?: "Not set — click to choose this TV's id",
+            actionLabel = megaflixDeviceId ?: "SET",
+            isFocused = focusedIndex == 16,
+            onClick = onCycleDeviceId,
+            modifier = Modifier.settingsFocusSlot(16)
         )
     }
 }
