@@ -63,6 +63,16 @@ fun Modifier.arvioFocusable(
 
     var isFocused by remember { mutableStateOf(false) }
     val visualFocused = isFocusedOverride || (useSystemFocusForVisuals && isFocused)
+
+    // ADIK: hover sound on the VISUAL focus rising edge. Many screens (home rows,
+    // sidebar-driven lists) highlight via isFocusedOverride without ever moving
+    // real system focus, so hooking onFocusChanged alone stays silent there.
+    var hadVisualFocus by remember { mutableStateOf(visualFocused) }
+    androidx.compose.runtime.LaunchedEffect(visualFocused) {
+        if (visualFocused && !hadVisualFocus) com.arflix.tv.util.NavSound.play()
+        hadVisualFocus = visualFocused
+    }
+
     val targetScale = when {
         isPressed -> pressedScale
         visualFocused -> focusedScale
@@ -119,7 +129,11 @@ fun Modifier.arvioFocusable(
             val focusedNow = state.isFocused
             if (focusedNow != isFocused) {
                 isFocused = focusedNow
-                if (focusedNow) com.arflix.tv.util.NavSound.play() // ADIK: hover sound
+                // ADIK: hover sound handled by the visualFocused rising edge above
+                // (covers both real focus and isFocusedOverride without doubling).
+                if (focusedNow && !useSystemFocusForVisuals && !isFocusedOverride) {
+                    com.arflix.tv.util.NavSound.play()
+                }
                 onFocusChanged(focusedNow)
             }
         }

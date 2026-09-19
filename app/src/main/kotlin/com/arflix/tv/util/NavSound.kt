@@ -18,8 +18,10 @@ object NavSound {
 
     fun init(context: Context) {
         if (soundPool != null) return
+        // USAGE_MEDIA: TVs (TCL included) often mute the sonification/system
+        // stream entirely, which made the hover sound silent on the real TV.
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val sp = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()

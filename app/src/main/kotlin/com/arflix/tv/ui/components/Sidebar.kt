@@ -152,6 +152,11 @@ private fun SidebarProfileAvatar(
     profile: Profile,
     isFocused: Boolean
 ) {
+    // ADIK: hover sound (index-driven focus, see SidebarIcon).
+    androidx.compose.runtime.LaunchedEffect(isFocused) {
+        if (isFocused) com.arflix.tv.util.NavSound.play()
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1f,
         animationSpec = tween(
@@ -214,6 +219,12 @@ private fun SidebarIcon(
     hasBadge: Boolean = false
 ) {
     val accent = resolveAccentColor(fallback = Color.White)
+
+    // ADIK: sidebar highlight is index-driven (no real focus), so hover sound
+    // fires here on the rising edge.
+    androidx.compose.runtime.LaunchedEffect(isFocused) {
+        if (isFocused) com.arflix.tv.util.NavSound.play()
+    }
 
     // Animated icon color - white when focused, accent when selected-only
     val iconColor by animateColorAsState(
