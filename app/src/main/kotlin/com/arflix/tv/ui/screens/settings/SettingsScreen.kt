@@ -570,6 +570,8 @@ fun SettingsScreen(
     // null = adding a new portal; non-null = editing the portal with this id.
     var stalkerEditId by remember { mutableStateOf<String?>(null) }
     var showStalkerRename by remember { mutableStateOf(false) }
+    var showDeviceIdInput by remember { mutableStateOf(false) }
+    var deviceIdInput by remember { mutableStateOf("") }
     var stalkerRenameId by remember { mutableStateOf("") }
     var stalkerRenameName by remember { mutableStateOf("") }
     var showCatalogInput by remember { mutableStateOf(false) }
@@ -1548,7 +1550,10 @@ fun SettingsScreen(
                                                 13 -> openExternalUrl(context, PRIVACY_POLICY_URL)
                                                 14 -> openExternalUrl(context, ACCOUNT_DELETION_URL)
                                                 15 -> showCredits = true
-                                                16 -> viewModel.cycleMegaflixDeviceId()
+                                                16 -> {
+                                                    deviceIdInput = uiState.megaflixDeviceId.orEmpty()
+                                                    showDeviceIdInput = true
+                                                }
                                             }
                                         }
                                         "plugins" -> {
@@ -2155,7 +2160,10 @@ fun SettingsScreen(
                             onOpenCredits = { showCredits = true },
                             onOpenDataDeletion = { openExternalUrl(context, ACCOUNT_DELETION_URL) },
                             megaflixDeviceId = uiState.megaflixDeviceId,
-                            onCycleDeviceId = { viewModel.cycleMegaflixDeviceId() },
+                            onEditDeviceId = {
+                                deviceIdInput = uiState.megaflixDeviceId.orEmpty()
+                                showDeviceIdInput = true
+                            },
                         )
                     }
                   }
@@ -2442,7 +2450,24 @@ fun SettingsScreen(
             )
         }
 
-
+        if (showDeviceIdInput) {
+            InputModal(
+                title = "Device ID",
+                fields = listOf(
+                    InputField(
+                        label = "Device ID",
+                        value = deviceIdInput,
+                        placeholder = "e.g. T_12345_XX",
+                        onValueChange = { deviceIdInput = it }
+                    )
+                ),
+                onConfirm = {
+                    viewModel.setMegaflixDeviceId(deviceIdInput)
+                    showDeviceIdInput = false
+                },
+                onDismiss = { showDeviceIdInput = false }
+            )
+        }
 
         if (showCatalogInput) {
             CatalogDiscoveryModal(
@@ -9247,7 +9272,7 @@ private fun AccountsSettings(
     onOpenDataDeletion: () -> Unit,
     onOpenCredits: () -> Unit,
     megaflixDeviceId: String? = null,
-    onCycleDeviceId: () -> Unit = {},
+    onEditDeviceId: () -> Unit = {},
 ) {
     Column {
         if (LocalDeviceType.current.isTouchDevice()) {
@@ -9516,10 +9541,10 @@ private fun AccountsSettings(
         // sent as `d=` on feed calls and used to target remote assist later.
         SettingsActionRow(
             title = "Device ID",
-            description = megaflixDeviceId ?: "Not set — click to choose this TV's id",
+            description = megaflixDeviceId ?: "Not set — enter the id for this TV",
             actionLabel = megaflixDeviceId ?: "SET",
             isFocused = focusedIndex == 16,
-            onClick = onCycleDeviceId,
+            onClick = onEditDeviceId,
             modifier = Modifier.settingsFocusSlot(16)
         )
     }

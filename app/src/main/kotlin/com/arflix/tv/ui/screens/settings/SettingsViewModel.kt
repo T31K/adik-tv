@@ -335,13 +335,12 @@ class SettingsViewModel @Inject constructor(
     private val simklSyncService: com.arflix.tv.data.repository.simkl.SimklSyncService,
     private val megaflixStore: com.arflix.tv.megaflix.DownloadStateStore
 ) : ViewModel() {
-    /** ADIK: click-to-cycle through the family fleet ids (one-time setup per TV). */
-    fun cycleMegaflixDeviceId() {
+    /** ADIK: the owner types this TV's fleet id once (valid list lives server-side). */
+    fun setMegaflixDeviceId(raw: String) {
         viewModelScope.launch {
-            val ids = com.arflix.tv.util.Constants.MEGAFLIX_DEVICE_IDS
-            val next = ids[(ids.indexOf(_uiState.value.megaflixDeviceId) + 1).mod(ids.size)]
-            runCatching { megaflixStore.setDeviceId(next) }
-            _uiState.value = _uiState.value.copy(megaflixDeviceId = next)
+            val id = raw.trim().takeIf { it.isNotBlank() }
+            runCatching { megaflixStore.setDeviceId(id) }
+            _uiState.value = _uiState.value.copy(megaflixDeviceId = id)
         }
     }
 
