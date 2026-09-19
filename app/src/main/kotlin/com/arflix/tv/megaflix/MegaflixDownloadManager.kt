@@ -18,14 +18,16 @@ class MegaflixDownloadManager @Inject constructor(
         val records = store.all()
         val id = DownloadQueue.nextToDownload(records) ?: return false
         val feedItem = syncManager.feedItems.value.firstOrNull { it.id == id } ?: return false
-        // Flat model: download into the single Megaflix/ folder, then rename to the exact feed filename.
-        val saveDir = driveManager.mediaDir() ?: return false
-        saveDir.mkdirs()
+        val mediaDir = driveManager.mediaDir() ?: return false
+        // Download into a per-item temp subfolder so the "largest video" we pick is THIS
+        // torrent's file only — never another movie already sitting in Megaflix/.
+        val tmpDir = File(mediaDir, ".dl_$id")
+        tmpDir.mkdirs()
 
         store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes)))
         return try {
             var lastPersisted = 0f
-            val downloaded = engine.download(feedItem.link, saveDir) { p ->
+            val downloaded = engine.download(feedItem.link, tmpDir) { p ->
                 // Throttle DataStore writes: persist at most every ~1% (and at completion).
                 if (p - lastPersisted >= 0.01f || p >= 1f) {
                     lastPersisted = p
@@ -34,9 +36,12 @@ class MegaflixDownloadManager @Inject constructor(
                     }
                 }
             }
-            // Rename the torrent's video file to the exact feed filename (feedItem.path).
-            val target = File(saveDir, feedItem.path)
-            val finalFile = if (downloaded.absolutePath != target.absolutePath && downloaded.renameTo(target)) target else downloaded
+            // Move the torrent's video out to the exact feed filename, then drop the temp folder.
+            val target = File(mediaDir, feedItem.path)
+            if (target.exists()) target.delete()
+            val moved = downloaded.renameTo(target)
+            val finalFile = if (moved) target else downloaded
+            if (moved) tmpDir.deleteRecursively()
             store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes)))
             true
         } catch (t: Throwable) {
