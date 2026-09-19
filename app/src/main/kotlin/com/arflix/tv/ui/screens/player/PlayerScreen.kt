@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,6 +73,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -479,11 +482,17 @@ fun PlayerScreen(
     val skipIntroFocusRequester = remember { FocusRequester() }
     val subtitleSettingsBtnFocusRequester = remember { FocusRequester() }
     val pipButtonFocusRequester = remember { FocusRequester() }
+    // ADIK Netflix-style controls: top back button + bottom Episodes button.
+    val backButtonFocusRequester = remember { FocusRequester() }
+    val episodesButtonFocusRequester = remember { FocusRequester() }
 
     // Focus state - 0=Play, 1=Subtitles
     var focusedButton by remember { mutableIntStateOf(0) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
     var showSourceMenu by remember { mutableStateOf(false) }
+    // ADIK: TV episodes panel (Netflix-style bottom row "Episodes").
+    var showEpisodesMenu by remember { mutableStateOf(false) }
+    var episodesMenuIndex by remember { mutableIntStateOf(0) }
 
     var seekPreviewFrame by remember { mutableStateOf<SeekPreviewFrame?>(null) }
     var trackbarFocused by remember { mutableStateOf(false) }
@@ -3019,6 +3028,15 @@ fun PlayerScreen(
         }
     }
 
+    BackHandler(enabled = showEpisodesMenu) {
+        showEpisodesMenu = false
+        showControls = true
+        coroutineScope.launch {
+            delay(120)
+            runCatching { episodesButtonFocusRequester.requestFocus() }
+        }
+    }
+
     BackHandler(enabled = showSourceMenu) {
         if (uiState.selectedStreamUrl.isNullOrBlank()) {
             onExitPlayer()
@@ -3190,6 +3208,43 @@ fun PlayerScreen(
                             }
                             Key.Back, Key.Escape -> {
                                 cancelNextEpisodePrompt()
+                                true
+                            }
+                            else -> true
+                        }
+                    }
+
+                    // ADIK: Episodes panel (TV) — index-driven list, swallows all keys while open.
+                    if (showEpisodesMenu) {
+                        return@onKeyEvent when (event.key) {
+                            Key.DirectionUp -> {
+                                if (episodesMenuIndex > 0) episodesMenuIndex--
+                                true
+                            }
+                            Key.DirectionDown -> {
+                                if (episodesMenuIndex < uiState.seasonEpisodes.lastIndex) episodesMenuIndex++
+                                true
+                            }
+                            Key.Enter, Key.DirectionCenter -> {
+                                uiState.seasonEpisodes.getOrNull(episodesMenuIndex)?.let { ep ->
+                                    showEpisodesMenu = false
+                                    val selected = uiState.selectedStream
+                                    playNextEpisode(
+                                        ep.identity,
+                                        selected?.addonId?.takeIf { it.isNotBlank() },
+                                        selected?.source?.takeIf { it.isNotBlank() },
+                                        null
+                                    )
+                                }
+                                true
+                            }
+                            Key.Back, Key.Escape -> {
+                                showEpisodesMenu = false
+                                showControls = true
+                                coroutineScope.launch {
+                                    delay(120)
+                                    runCatching { episodesButtonFocusRequester.requestFocus() }
+                                }
                                 true
                             }
                             else -> true
@@ -3995,119 +4050,88 @@ fun PlayerScreen(
         if (!isTouchDevice && !isInPipMode) {
             // Netflix-style Controls Overlay
             AnimatedVisibility(
-                visible = hasPlaybackStarted && showControls && !showSubtitleMenu && !showSourceMenu && !isInPipMode,
+                visible = hasPlaybackStarted && showControls && !showSubtitleMenu && !showSourceMenu && !showEpisodesMenu && !isInPipMode,
                 enter = fadeIn(androidx.compose.animation.core.tween(150)),
                 exit = fadeOut(androidx.compose.animation.core.tween(200))
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top info
-                    Row(
+                    // ADIK: Netflix-style top bar — back button (left) + title (center). No cast.
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
+                            .align(Alignment.TopCenter)
                             .fillMaxWidth()
-                            .padding(
-                                start = if (isTouchDevice) 20.dp else 28.dp,
-                                top = if (isTouchDevice) 18.dp else 30.dp,
-                                end = if (isTouchDevice) 24.dp else 48.dp
-                            )
-                            .zIndex(4f),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
+                            .padding(start = 28.dp, top = 24.dp, end = 28.dp)
+                            .zIndex(4f)
                     ) {
-                        val isPaused = hasPlaybackStarted && !isPlaying && !isBuffering
-
-                        PlayerMetadataChrome(
-                            uiState = uiState,
-                            mediaType = mediaType,
-                            seasonNumber = seasonNumber,
-                            episodeNumber = episodeNumber,
-                            isPaused = isPaused,
-                            accentColor = playerAccent,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-
-                        // Right side - Cast button (mobile) + Ends At + Clock
-                        Column(horizontalAlignment = Alignment.End) {
-                            val currentTime = remember { mutableStateOf("") }
-                            val endsAtTime = remember { mutableStateOf("") }
-                            LaunchedEffect(duration, currentPosition, clockFormat) {
-                                while (true) {
-                                    val now = System.currentTimeMillis()
-                                    currentTime.value = formatPlayerClockTime(now, clockFormat)
-                                    if (duration > 0 && currentPosition >= 0) {
-                                        val remainingMs = (duration - currentPosition).coerceAtLeast(0L)
-                                        endsAtTime.value = formatPlayerClockTime(now + remainingMs, clockFormat)
-                                    } else { endsAtTime.value = "" }
-                                    kotlinx.coroutines.delay(1000)
-                                }
-                            }
-
-                            // Cast button — mobile/tablet only; hidden when stream requires custom headers
-                            if (isTouchDevice && castAvailable && !streamNeedsHeaders) {
-                                val castDeviceName = (castState as? CastManager.CastState.Casting)?.deviceName
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(bottom = if (endsAtTime.value.isNotBlank() || !isTouchDevice) 4.dp else 0.dp)
-                                ) {
-                                    if (castDeviceName != null) {
-                                        androidx.tv.material3.Text(
-                                            text = castDeviceName,
-                                            style = ArflixTypography.caption.copy(fontSize = 11.sp),
-                                            color = Color.White.copy(alpha = 0.85f),
-                                            maxLines = 1
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isCasting) Color.White.copy(alpha = 0.2f)
-                                                else Color.Transparent
-                                            )
-                                            .clickable {
-                                                if (isCasting) {
-                                                    castManager.disconnect()
-                                                } else {
-                                                    val dialog = MediaRouteChooserDialog(context)
-                                                    dialog.routeSelector = castManager.getRouteSelector()
-                                                    dialog.show()
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
-                                            contentDescription = if (isCasting) stringResource(R.string.player_cd_stop_casting) else stringResource(R.string.player_cd_cast_to_tv),
-                                            tint = if (isCasting) playerAccent else Color.White.copy(alpha = 0.85f),
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (!isTouchDevice) {
-                                Text(
-                                    currentTime.value,
-                                    style = ArflixTypography.sectionTitle.copy(
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    color = TextPrimary.copy(alpha = 0.92f),
-                                    maxLines = 1
-                                )
-                            }
-                            if (endsAtTime.value.isNotBlank()) {
-                                Text(
-                                    "${stringResource(R.string.ends_at)} ${endsAtTime.value}",
-                                    style = ArflixTypography.caption.copy(fontSize = 12.sp),
-                                    color = TextPrimary.copy(alpha = 0.72f),
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
+                        Box(modifier = Modifier.align(Alignment.CenterStart)) {
+                            PlayerIconButton(
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.close),
+                                focusRequester = backButtonFocusRequester,
+                                size = 44.dp,
+                                iconSize = 28.dp,
+                                onFocusChanged = {},
+                                onClick = onExitPlayer,
+                                onDownKey = { playButtonFocusRequester.requestFocus() }
+                            )
                         }
+                        Text(
+                            text = if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null)
+                                "S${seasonNumber}:E${episodeNumber}  ${uiState.title}"
+                            else uiState.title,
+                            style = ArflixTypography.sectionTitle.copy(
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = Color.White.copy(alpha = 0.95f),
+                            maxLines = 1,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 64.dp)
+                        )
+                    }
+
+                    // ADIK: Netflix-style center cluster — rewind / play-pause / forward.
+                    Row(
+                        modifier = Modifier.align(Alignment.Center).zIndex(4f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(48.dp)
+                    ) {
+                        PlayerIconButton(icon = Icons.Default.Replay10, contentDescription = stringResource(R.string.player_cd_rewind),
+                            focusRequester = rewindButtonFocusRequester, size = 56.dp, iconSize = 34.dp,
+                            onFocusChanged = {},
+                            onClick = { skipWithoutPreview(-10_000L) },
+                            onRightKey = { playButtonFocusRequester.requestFocus() },
+                            onUpKey = { backButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        PlayerIconButton(icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) stringResource(R.string.player_cd_pause) else stringResource(R.string.play),
+                            focusRequester = playButtonFocusRequester, size = 72.dp, iconSize = 44.dp,
+                            onFocusChanged = { if (it) focusedButton = 0 },
+                            onClick = {
+                                if (isCasting) {
+                                    if (castManager.isRemotePlaying()) castManager.pause()
+                                    else castManager.play()
+                                } else {
+                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                }
+                            },
+                            onLeftKey = { rewindButtonFocusRequester.requestFocus() },
+                            onRightKey = { forwardButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() },
+                            onUpKey = {
+                                val sv = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed
+                                if (sv) skipIntroFocusRequester.requestFocus() else backButtonFocusRequester.requestFocus()
+                            })
+
+                        PlayerIconButton(icon = Icons.Default.Forward10, contentDescription = stringResource(R.string.player_cd_forward),
+                            focusRequester = forwardButtonFocusRequester, size = 56.dp, iconSize = 34.dp,
+                            onFocusChanged = {},
+                            onClick = { skipWithoutPreview(10_000L) },
+                            onLeftKey = { playButtonFocusRequester.requestFocus() },
+                            onUpKey = { backButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
                     }
 
                     // Bottom controls - positioned at very bottom.
@@ -4133,231 +4157,8 @@ fun PlayerScreen(
                             .padding(horizontal = if (isTouchDevice) 24.dp else 48.dp)
                             .padding(top = if (isTouchDevice) 16.dp else 24.dp, bottom = if (isTouchDevice) 32.dp else 24.dp)
                     ) {
-                        // Icon buttons row. On tablet we center the row and use slightly
-                        // larger buttons than TV to match the shorter viewing distance and
-                        // the Material minimum touch-target of 48dp. Phone keeps the compact
-                        // left-aligned layout to fit vertical orientation. Issue #97.
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (isTablet) Arrangement.Center else Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Three-way sizing: phone (compact) < TV (medium) < tablet (largest).
-                            // The old logic made touch devices SMALLER than TV which was
-                            // backwards for tablet finger targets.
-                            val smallBtn = when {
-                                isTablet -> 36.dp
-                                isPhone -> 24.dp
-                                else -> 28.dp
-                            }
-                            val smallIcon = when {
-                                isTablet -> 22.dp
-                                isPhone -> 17.dp
-                                else -> 19.dp
-                            }
-                            val midBtn = when {
-                                isTablet -> 40.dp
-                                isPhone -> 28.dp
-                                else -> 30.dp
-                            }
-                            val midIcon = when {
-                                isTablet -> 24.dp
-                                isPhone -> 20.dp
-                                else -> 22.dp
-                            }
-                            val bigBtn = when {
-                                isTablet -> 48.dp
-                                isPhone -> 34.dp
-                                else -> 38.dp
-                            }
-                            val bigIcon = when {
-                                isTablet -> 30.dp
-                                isPhone -> 26.dp
-                                else -> 28.dp
-                            }
-                            val gap = when {
-                                isTablet -> 16.dp
-                                isPhone -> 10.dp
-                                else -> 14.dp
-                            }
-                            val wideGap = when {
-                                isTablet -> 20.dp
-                                isPhone -> 14.dp
-                                else -> 18.dp
-                            }
-
-                            // Subtitles
-                            PlayerIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "${stringResource(R.string.subtitles)} / ${stringResource(R.string.audio)}",
-                                focusRequester = subtitleButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = { if (it) focusedButton = 1 },
-                                onClick = {
-                                    subtitleMenuIndex = 0
-                                    subtitlePanelFocus = 0
-                                    val selected = latestUiState.selectedSubtitle
-                                    if (selected == null) {
-                                        subtitleLangIndex = 0
-                                        subtitleTrackIndex = 0
-                                    } else if (latestUiState.isAiAvailable && latestUiState.aiTargetLanguageName.isNotBlank() &&
-                                        (latestUiState.isAiTranslating || latestUiState.selectedSubtitle?.let { sub ->
-                                            subtitleGroups.none { (_, items) -> items.any { (_, s) -> s.id == sub.id } }
-                                        } == true)) {
-                                        val aiLangName = latestUiState.aiTargetLanguageName
-                                        val idx = subtitleGroups.indexOfFirst { (name, _) -> name.equals(aiLangName, ignoreCase = true) }
-                                        subtitleLangIndex = if (idx >= 0) idx + 1 else 0
-                                        subtitleTrackIndex = 0
-                                    } else {
-                                        val langName = getFullLanguageName(selected.lang)
-                                        val idx = subtitleGroups.indexOfFirst { (name, _) -> name.equals(langName, ignoreCase = true) }
-                                        subtitleLangIndex = if (idx >= 0) idx + 1 else 0
-                                        subtitleTrackIndex = subtitleGroups.getOrNull(subtitleLangIndex - 1)?.second
-                                            ?.indexOfFirst { (_, sub) -> isSameSubtitleTrack(selected, sub.id) }?.coerceAtLeast(0) ?: 0
-                                    }
-                                    showSubtitleMenu = true
-                                    // Move focus to container so all D-pad keys go to the menu handler
-                                    coroutineScope.launch {
-                                        delay(50)
-                                        try { containerFocusRequester.requestFocus() } catch (_: Exception) {}
-                                    }
-                                },
-                                onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
-                                onRightKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            Spacer(modifier = Modifier.width(gap))
-
-                            // Subtitle settings (delay, size, vertical position)
-                            PlayerIconButton(icon = Icons.Default.Tune, contentDescription = stringResource(R.string.subtitle_settings_title),
-                                focusRequester = subtitleSettingsBtnFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = {},
-                                onClick = {
-                                    showSubtitleSettings = !showSubtitleSettings
-                                    if (showSubtitleSettings) {
-                                        subtitleSettingsRow = 0
-                                        coroutineScope.launch {
-                                            delay(50)
-                                            runCatching { containerFocusRequester.requestFocus() }
-                                        }
-                                    }
-                                },
-                                onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
-                                onRightKey = { sourceButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            Spacer(modifier = Modifier.width(gap))
-
-                            // Sources
-                            PlayerIconButton(icon = Icons.Default.Folder, contentDescription = stringResource(R.string.sources),
-                                focusRequester = sourceButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = {},
-                                onClick = { showSourceMenu = true; showControls = true },
-                                onLeftKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
-                                onRightKey = { if (isTouchDevice) playButtonFocusRequester.requestFocus() else rewindButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            if (!isTouchDevice) {
-                                Spacer(modifier = Modifier.width(wideGap))
-
-                                // Rewind 10s
-                                PlayerIconButton(icon = Icons.Default.Replay10, contentDescription = stringResource(R.string.player_cd_rewind),
-                                    focusRequester = rewindButtonFocusRequester, size = midBtn, iconSize = midIcon,
-                                    onFocusChanged = {},
-                                    onClick = { skipWithoutPreview(-10_000L) },
-                                    onLeftKey = { sourceButtonFocusRequester.requestFocus() },
-                                    onRightKey = { playButtonFocusRequester.requestFocus() },
-                                    onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                                Spacer(modifier = Modifier.width(gap))
-                            } else {
-                                Spacer(modifier = Modifier.width(wideGap))
-                            }
-
-                            // Play/Pause - center, largest
-                            PlayerIconButton(icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) stringResource(R.string.player_cd_pause) else stringResource(R.string.play),
-                                focusRequester = playButtonFocusRequester, size = bigBtn, iconSize = bigIcon,
-                                onFocusChanged = { if (it) focusedButton = 0 },
-                                onClick = {
-                                    if (isCasting) {
-                                        if (castManager.isRemotePlaying()) castManager.pause()
-                                        else castManager.play()
-                                    } else {
-                                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                    }
-                                },
-                                onLeftKey = { if (isTouchDevice) sourceButtonFocusRequester.requestFocus() else rewindButtonFocusRequester.requestFocus() },
-                                onRightKey = { if (isTouchDevice) aspectButtonFocusRequester.requestFocus() else forwardButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() },
-                                onUpKey = { val sv = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed; if (sv) skipIntroFocusRequester.requestFocus() })
-
-                            if (!isTouchDevice) {
-                                Spacer(modifier = Modifier.width(gap))
-
-                                // Forward 10s - own focus requester
-                                PlayerIconButton(icon = Icons.Default.Forward10, contentDescription = stringResource(R.string.player_cd_forward),
-                                    focusRequester = forwardButtonFocusRequester, size = midBtn, iconSize = midIcon,
-                                    onFocusChanged = {},
-                                    onClick = { skipWithoutPreview(10_000L) },
-                                    onLeftKey = { playButtonFocusRequester.requestFocus() },
-                                    onRightKey = { aspectButtonFocusRequester.requestFocus() },
-                                    onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                                Spacer(modifier = Modifier.width(wideGap))
-                            } else {
-                                Spacer(modifier = Modifier.width(wideGap))
-                            }
-
-                            // Aspect Ratio
-                            PlayerIconButton(icon = Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_cd_aspect, aspectModeLabel),
-                                focusRequester = aspectButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = {},
-                                onClick = cycleAspectRatio,
-                                onLeftKey = { if (isTouchDevice) playButtonFocusRequester.requestFocus() else forwardButtonFocusRequester.requestFocus() },
-                                onRightKey = {
-                                    when {
-                                        mediaType == MediaType.TV -> nextEpisodeButtonFocusRequester.requestFocus()
-                                        isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> pipButtonFocusRequester.requestFocus()
-                                        else -> subtitleButtonFocusRequester.requestFocus()
-                                    }
-                                },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            if (mediaType == MediaType.TV) {
-                                Spacer(modifier = Modifier.width(gap))
-                                PlayerIconButton(icon = Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_episode),
-                                    focusRequester = nextEpisodeButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                    onFocusChanged = {},
-                                    onClick = {
-                                        val next = nextEpisodeIdentity ?: return@PlayerIconButton
-                                        val selected = uiState.selectedStream
-                                        playNextEpisode(
-                                            next,
-                                            selected?.addonId?.takeIf { it.isNotBlank() },
-                                            selected?.source?.takeIf { it.isNotBlank() },
-                                            selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
-                                        )
-                                    },
-                                    onLeftKey = { aspectButtonFocusRequester.requestFocus() },
-                                    onRightKey = { subtitleButtonFocusRequester.requestFocus() },
-                                    onDownKey = { trackbarFocusRequester.requestFocus() })
-                            }
-
-                            // PiP button — touch devices only, just right of other buttons, Android 8+
-                            if (isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                Spacer(modifier = Modifier.width(gap))
-                                PlayerIconButton(
-                                    icon = Icons.Default.PictureInPicture,
-                                    contentDescription = stringResource(R.string.player_cd_pip),
-                                    focusRequester = pipButtonFocusRequester,
-                                    size = smallBtn, iconSize = smallIcon,
-                                    onFocusChanged = {},
-                                    onClick = { enterPipMode() },
-                                    onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
-                                    onRightKey = { subtitleButtonFocusRequester.requestFocus() },
-                                    onDownKey = { trackbarFocusRequester.requestFocus() }
-                                )
-                            }
-                        }
-
+                        // ADIK: old icon-button row removed — controls are now a Netflix-style
+                        // center cluster (rewind/play/forward) + a labeled row under the seek bar.
 
                         Spacer(modifier = Modifier.height(if (isTouchDevice) 4.dp else 6.dp))
 
@@ -4463,7 +4264,20 @@ fun PlayerScreen(
                                                 }
                                                 Key.Enter, Key.DirectionCenter -> { commitControlsSeekNow(); true }
                                                 Key.DirectionUp -> { finishSeek(false); playButtonFocusRequester.requestFocus(); true }
-                                                Key.DirectionDown -> true
+                                                Key.DirectionDown -> {
+                                                    // ADIK: move down to the labeled action row.
+                                                    finishSeek(false)
+                                                    if (!isTouchDevice) {
+                                                        runCatching {
+                                                            if (mediaType == MediaType.TV && uiState.seasonEpisodes.isNotEmpty()) {
+                                                                episodesButtonFocusRequester.requestFocus()
+                                                            } else {
+                                                                subtitleButtonFocusRequester.requestFocus()
+                                                            }
+                                                        }
+                                                    }
+                                                    true
+                                                }
                                                 else -> false
                                             }
                                         } else false
@@ -4493,12 +4307,187 @@ fun PlayerScreen(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Text(
-                                text = formatTime(duration),
+                                text = formatTime((duration - controlsPreviewPosition).coerceAtLeast(0L)),
                                 style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = Color.White.copy(alpha = 0.7f),
                                 maxLines = 1,
                                 modifier = Modifier.width(if (isTouchDevice) 48.dp else 55.dp)
                             )
+                        }
+
+                        // ADIK: Netflix-style labeled action row under the seek bar.
+                        if (!isTouchDevice) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PlayerLabeledButton(
+                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    label = stringResource(R.string.episodes),
+                                    enabled = mediaType == MediaType.TV && uiState.seasonEpisodes.isNotEmpty(),
+                                    focusRequester = episodesButtonFocusRequester,
+                                    onClick = {
+                                        episodesMenuIndex = uiState.seasonEpisodes
+                                            .indexOfFirst { it.episodeNumber == episodeNumber }
+                                            .coerceAtLeast(0)
+                                        showEpisodesMenu = true
+                                        coroutineScope.launch {
+                                            delay(50)
+                                            runCatching { containerFocusRequester.requestFocus() }
+                                        }
+                                    },
+                                    onRightKey = { subtitleButtonFocusRequester.requestFocus() },
+                                    onUpKey = { trackbarFocusRequester.requestFocus() }
+                                )
+
+                                Spacer(modifier = Modifier.width(28.dp))
+
+                                PlayerLabeledButton(
+                                    icon = Icons.Default.ClosedCaption,
+                                    label = stringResource(R.string.subtitles),
+                                    enabled = true,
+                                    focusRequester = subtitleButtonFocusRequester,
+                                    onClick = {
+                                        subtitleMenuIndex = 0
+                                        subtitlePanelFocus = 0
+                                        val selected = latestUiState.selectedSubtitle
+                                        if (selected == null) {
+                                            subtitleLangIndex = 0
+                                            subtitleTrackIndex = 0
+                                        } else if (latestUiState.isAiAvailable && latestUiState.aiTargetLanguageName.isNotBlank() &&
+                                            (latestUiState.isAiTranslating || latestUiState.selectedSubtitle?.let { sub ->
+                                                subtitleGroups.none { (_, items) -> items.any { (_, s) -> s.id == sub.id } }
+                                            } == true)) {
+                                            val aiLangName = latestUiState.aiTargetLanguageName
+                                            val idx = subtitleGroups.indexOfFirst { (name, _) -> name.equals(aiLangName, ignoreCase = true) }
+                                            subtitleLangIndex = if (idx >= 0) idx + 1 else 0
+                                            subtitleTrackIndex = 0
+                                        } else {
+                                            val langName = getFullLanguageName(selected.lang)
+                                            val idx = subtitleGroups.indexOfFirst { (name, _) -> name.equals(langName, ignoreCase = true) }
+                                            subtitleLangIndex = if (idx >= 0) idx + 1 else 0
+                                            subtitleTrackIndex = subtitleGroups.getOrNull(subtitleLangIndex - 1)?.second
+                                                ?.indexOfFirst { (_, sub) -> isSameSubtitleTrack(selected, sub.id) }?.coerceAtLeast(0) ?: 0
+                                        }
+                                        showSubtitleMenu = true
+                                        // Move focus to container so all D-pad keys go to the menu handler
+                                        coroutineScope.launch {
+                                            delay(50)
+                                            try { containerFocusRequester.requestFocus() } catch (_: Exception) {}
+                                        }
+                                    },
+                                    onLeftKey = { if (mediaType == MediaType.TV && uiState.seasonEpisodes.isNotEmpty()) episodesButtonFocusRequester.requestFocus() },
+                                    onRightKey = { if (mediaType == MediaType.TV && nextEpisodeIdentity != null) nextEpisodeButtonFocusRequester.requestFocus() },
+                                    onUpKey = { trackbarFocusRequester.requestFocus() }
+                                )
+
+                                Spacer(modifier = Modifier.width(28.dp))
+
+                                PlayerLabeledButton(
+                                    icon = Icons.Default.SkipNext,
+                                    label = stringResource(R.string.next_episode),
+                                    enabled = mediaType == MediaType.TV && nextEpisodeIdentity != null,
+                                    focusRequester = nextEpisodeButtonFocusRequester,
+                                    onClick = {
+                                        val next = nextEpisodeIdentity ?: return@PlayerLabeledButton
+                                        val selected = uiState.selectedStream
+                                        playNextEpisode(
+                                            next,
+                                            selected?.addonId?.takeIf { it.isNotBlank() },
+                                            selected?.source?.takeIf { it.isNotBlank() },
+                                            selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
+                                        )
+                                    },
+                                    onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
+                                    onUpKey = { trackbarFocusRequester.requestFocus() }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ADIK: Episodes panel — Netflix-style episode picker (TV remote driven).
+            AnimatedVisibility(
+                visible = showEpisodesMenu,
+                enter = fadeIn(animTween(150)),
+                exit = fadeOut(animTween(150)),
+                modifier = Modifier.zIndex(9f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.88f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth(0.62f)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.episodes) +
+                                (seasonNumber?.let { "  ·  S$it" } ?: ""),
+                            style = ArflixTypography.sectionTitle.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        val episodesListState = rememberLazyListState()
+                        LaunchedEffect(showEpisodesMenu, episodesMenuIndex) {
+                            if (showEpisodesMenu) {
+                                runCatching { episodesListState.animateScrollToItem(episodesMenuIndex.coerceAtLeast(0)) }
+                            }
+                        }
+                        LazyColumn(
+                            state = episodesListState,
+                            modifier = Modifier.heightIn(max = 380.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            itemsIndexed(uiState.seasonEpisodes) { idx, ep ->
+                                val selectedRow = idx == episodesMenuIndex
+                                val isCurrent = ep.episodeNumber == episodeNumber && ep.seasonNumber == seasonNumber
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            if (selectedRow) Color.White else Color.White.copy(alpha = 0.06f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "E${ep.episodeNumber}",
+                                        style = ArflixTypography.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold),
+                                        color = if (selectedRow) Color.Black else Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.width(48.dp)
+                                    )
+                                    Text(
+                                        text = ep.name,
+                                        style = ArflixTypography.label.copy(fontSize = 15.sp),
+                                        color = if (selectedRow) Color.Black else Color.White,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isCurrent) {
+                                        Box(
+                                            modifier = Modifier
+                                                .background(
+                                                    if (selectedRow) Color.Black.copy(alpha = 0.85f) else playerAccent.copy(alpha = 0.9f),
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.now_playing),
+                                                style = ArflixTypography.label.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -5035,6 +5024,78 @@ private fun PlayerIconButton(
             contentDescription = contentDescription,
             tint = if (focused) Color.Black else Color.White.copy(alpha = 0.6f),
             modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
+/**
+ * ADIK: Netflix-style labeled control (icon + text) for the row under the seek
+ * bar. Disabled buttons render dimmed and are skipped by D-pad focus.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun PlayerLabeledButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    onLeftKey: () -> Unit = {},
+    onRightKey: () -> Unit = {},
+    onUpKey: () -> Unit = {},
+    onDownKey: () -> Unit = {}
+) {
+    var focused by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .then(
+                if (enabled) Modifier
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state -> focused = state.isFocused }
+                    .focusable()
+                    .onKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown) {
+                            when (event.key) {
+                                Key.Enter, Key.DirectionCenter -> { onClick(); true }
+                                Key.DirectionLeft -> { onLeftKey(); true }
+                                Key.DirectionRight -> { onRightKey(); true }
+                                Key.DirectionUp -> { onUpKey(); true }
+                                Key.DirectionDown -> { onDownKey(); true }
+                                else -> false
+                            }
+                        } else false
+                    }
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+                else Modifier
+            )
+            .background(
+                color = if (focused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(6.dp)
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = when {
+                focused -> Color.Black
+                enabled -> Color.White.copy(alpha = 0.85f)
+                else -> Color.White.copy(alpha = 0.3f)
+            },
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = ArflixTypography.label.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+            color = when {
+                focused -> Color.Black
+                enabled -> Color.White.copy(alpha = 0.85f)
+                else -> Color.White.copy(alpha = 0.3f)
+            },
+            maxLines = 1
         )
     }
 }
