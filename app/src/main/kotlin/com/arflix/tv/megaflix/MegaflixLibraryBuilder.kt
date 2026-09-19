@@ -53,12 +53,14 @@ class MegaflixLibraryBuilder @Inject constructor(
         val records = store.all()
 
         // Refresh the episode-path cache from ALL series rows that are downloaded.
+        // Store as file:// URIs so the player treats them as local files (a bare
+        // path gets "https://" prepended by the stream resolver → network error).
         episodePathCache = feed
             .filter { typeOf(it) == MediaType.TV && it.season != null && it.episode != null }
             .mapNotNull { item ->
                 val rec = records[item.id]
                 if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
-                    Triple(item.tmdbId, item.season!!, item.episode!!) to rec.localFilePath
+                    Triple(item.tmdbId, item.season!!, item.episode!!) to toFileUri(rec.localFilePath)
                 else null
             }.toMap()
 
@@ -68,7 +70,7 @@ class MegaflixLibraryBuilder @Inject constructor(
             .mapNotNull { item ->
                 val rec = records[item.id]
                 if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
-                    item.tmdbId to rec.localFilePath else null
+                    item.tmdbId to toFileUri(rec.localFilePath) else null
             }.toMap()
 
         val wanted = feed.filter { filter == null || typeOf(it) == filter }
@@ -96,9 +98,12 @@ class MegaflixLibraryBuilder @Inject constructor(
     private fun typeOf(item: FeedItemDto): MediaType =
         if (item.type.equals("series", true) || item.type.equals("tv", true)) MediaType.TV else MediaType.MOVIE
 
+    private fun toFileUri(absPath: String): String =
+        if (absPath.startsWith("file://") || absPath.contains("://")) absPath else "file://$absPath"
+
     private suspend fun buildMovieItem(item: FeedItemDto, record: DownloadRecord?): MediaItem {
         val status = record?.status ?: DownloadStatus.COMING_SOON
-        val localUri = if (status == DownloadStatus.READY) record?.localFilePath else null
+        val localUri = if (status == DownloadStatus.READY) record?.localFilePath?.let { toFileUri(it) } else null
         val base = runCatching {
             val d = tmdbApi.getMovieDetails(item.tmdbId, apiKey)
             MediaItem(
