@@ -32,15 +32,15 @@ android {
     flavorDimensions += "distribution"
 
     defaultConfig {
-        applicationId = "com.megaflix.tv2"
+        applicationId = "com.adik.tv"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         minSdk = 23
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 1
+        versionName = "0.1.0"
         buildConfigField("String", "GITHUB_OWNER", "\"T31K\"")
-        buildConfigField("String", "GITHUB_REPO", "\"megaflix-tv\"")
+        buildConfigField("String", "GITHUB_REPO", "\"adik-tv\"")
         buildConfigField("Boolean", "FEATURE_PLUGINS_ENABLED", "false")
         // Public endpoint override for isolated preview testing; never a provider API key.
         buildConfigField("String", "SPORTS_METADATA_URL", "\"${escapeBuildConfigString(localSecretValue("SPORTS_METADATA_URL"))}\"")

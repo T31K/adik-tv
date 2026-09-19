@@ -227,7 +227,7 @@ fun ProfileSelectionScreen(
             ) {
                 // Title
                 Text(
-                    text = "MEGAFLIX",
+                    text = "ADIK TV",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,

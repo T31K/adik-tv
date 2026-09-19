@@ -544,7 +544,7 @@ fun ArvioLoadingScreen() {
         }
 
         Text(
-            text = "MEGAFLIX",
+            text = "ADIK TV",
             color = Color.White,
             fontSize = 44.sp,
             fontWeight = FontWeight.ExtraBold,

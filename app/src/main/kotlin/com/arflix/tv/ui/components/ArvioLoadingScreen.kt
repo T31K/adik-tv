@@ -83,13 +83,12 @@ fun ArvioLoadingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "MEGAFLIX",
-                color = Color.White,
-                fontSize = 44.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 6.sp,
+            // ADIK TV splash logo
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = R.drawable.adik_logo),
+                contentDescription = "ADIK TV",
                 modifier = Modifier
+                    .fillMaxWidth(0.7f)
                     .graphicsLayer {
                         alpha = reveal.value * logoAlpha
                         scaleX = 0.94f + (0.06f * reveal.value)

@@ -56,7 +56,7 @@ class DownloadService : Service() {
             }
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Megaflix")
+            .setContentTitle("ADIK TV")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
