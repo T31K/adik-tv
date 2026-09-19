@@ -8,6 +8,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Megaflix: torrent downloads into the USB drive via a foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
     <!-- Megaflix: scan local video files for the "My Library" catalog. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -73,6 +80,12 @@
         <service
             android:name="com.discord.socialsdk.ForegroundService"
             tools:node="remove" />
+
+        <!-- Megaflix: foreground service that torrents feed items onto the USB drive. -->
+        <service
+            android:name=".megaflix.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <profileable
             android:shell="true"

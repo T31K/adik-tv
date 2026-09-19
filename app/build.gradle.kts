@@ -367,6 +367,17 @@ ksp {
     // (libffmpegJNI.so) is the likely source of the Play Console warning.
     add("sideloadImplementation", "org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
+    // Megaflix: embedded BitTorrent engine (downloads feed items to the USB drive).
+    // Plain implementation (both flavors) — only the sideload flavor ships, so a
+    // flavor/source-set split would add risk for no shipping benefit.
+    implementation("org.libtorrent4j:libtorrent4j:2.1.0-35")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-35")  // arm64-v8a
+    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-35")    // armeabi-v7a
+    // x86_64 native libs only when building for the emulator (-PincludeX86Abis=true).
+    if (includeX86Abis) {
+        implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-35")
+    }
+
     // Networking - Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
