@@ -343,16 +343,8 @@ fun ProfileSelectionScreen(
                     .offset(y = verticalCenterOffsetDp),
                 contentAlignment = Alignment.Center
             ) {
-                // ADIK: branded logo at the top during the loading transition.
-                Image(
-                    painter = painterResource(id = R.drawable.adik_logo),
-                    contentDescription = "ADIK TV",
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 48.dp)
-                        .width(220.dp)
-                        .graphicsLayer { alpha = transitionProgress }
-                )
+                // ADIK: no logo during the enlarge transition — the zooming
+                // avatar is the whole show (logo fading back in felt busy).
 
                 // The enlarged profile card: centered directly at (0, 0)
                 Box(

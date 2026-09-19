@@ -27,6 +27,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -146,6 +147,7 @@ import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.ui.components.AppTopBarHorizontalPadding
 import com.arflix.tv.data.model.SportsAddonCapabilities
 import com.arflix.tv.ui.components.SkeletonMobileHeroBanner
 import com.arflix.tv.ui.components.SkeletonPosterCard
@@ -708,9 +710,24 @@ fun HomeScreen(
     onNavigateToPlayer: (MediaType, Int, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
+    onProfileSwitched: () -> Unit = {},
     onExitApp: () -> Unit = {}
 ) {
     val isMobile = LocalDeviceType.current.isTouchDevice()
+
+    // ADIK: in-place profile switching from the top-bar avatar dropdown.
+    // Reuses ProfileViewModel.selectProfile (full cache isolation), then
+    // onProfileSwitched rebuilds the Home nav entry for the new profile.
+    val profileSwitchViewModel: com.arflix.tv.ui.screens.profile.ProfileViewModel = hiltViewModel()
+    val profileSwitchState by profileSwitchViewModel.uiState.collectAsStateWithLifecycle()
+    var pendingSwitchProfile by remember { mutableStateOf<com.arflix.tv.data.model.Profile?>(null) }
+    LaunchedEffect(pendingSwitchProfile, profileSwitchState.isSwitchingProfile, profileSwitchState.activeProfile?.id) {
+        val target = pendingSwitchProfile ?: return@LaunchedEffect
+        if (!profileSwitchState.isSwitchingProfile && profileSwitchState.activeProfile?.id == target.id) {
+            pendingSwitchProfile = null
+            onProfileSwitched()
+        }
+    }
 
     // Use preloaded data from StartupViewModel if available
     LaunchedEffect(preloadedCategories, preloadedHeroItem, preloadedHeroLogoUrl, preloadedLogoCache) {
@@ -1348,6 +1365,11 @@ fun HomeScreen(
             onSportsHomeItemClick = openSportsHomeItem,
             onNavigateToSettings = onNavigateToSettings,
             onSwitchProfile = onSwitchProfile,
+            profiles = profileSwitchState.profiles,
+            onProfileSelected = { chosen ->
+                pendingSwitchProfile = chosen
+                profileSwitchViewModel.selectProfile(chosen)
+            },
             onExitApp = onExitApp,
             featuredTrailerKey = null,
             featuredTrailerDelayMs = uiState.trailerDelaySeconds * 1000L,
@@ -2452,6 +2474,8 @@ internal fun HomeInputLayer(
     onSportsHomeItemClick: (MediaItem) -> Unit = {},
     onNavigateToSettings: () -> Unit,
     onSwitchProfile: () -> Unit,
+    profiles: List<com.arflix.tv.data.model.Profile> = emptyList(),
+    onProfileSelected: (com.arflix.tv.data.model.Profile) -> Unit = {},
     onExitApp: () -> Unit,
     featuredTrailerKey: String? = null,
     featuredTrailerDelayMs: Long = 0L,
@@ -2463,6 +2487,9 @@ internal fun HomeInputLayer(
     var selectPressedInHome by remember { mutableStateOf(false) }
     var selectDownAtMs by remember { mutableLongStateOf(0L) }
     var rootHasFocus by remember { mutableStateOf(false) }
+    // ADIK: tooltip-style profile switcher anchored under the top-bar avatar.
+    var showProfileMenu by remember { mutableStateOf(false) }
+    var profileMenuIndex by remember { mutableIntStateOf(0) }
     val focusRecoveryDelayMs = 180L
     val dpadRepeatGate = rememberArvioDpadRepeatGate(
         horizontalMinRepeatIntervalMs = 80L,
@@ -2509,7 +2536,9 @@ internal fun HomeInputLayer(
     BackHandler {
         selectPressedInHome = false
         selectDownAtMs = 0L
-        if (focusState.isSidebarFocused) {
+        if (showProfileMenu) {
+            showProfileMenu = false
+        } else if (focusState.isSidebarFocused) {
             onExitApp()
         } else {
             categories.getOrNull(focusState.currentRowIndex)?.id?.let { categoryId ->
@@ -2525,6 +2554,35 @@ internal fun HomeInputLayer(
         Modifier.onPreviewKeyEvent { event ->
             if (isContextMenuOpen) {
                 return@onPreviewKeyEvent false
+            }
+            // Profile switcher dropdown owns every key while open.
+            if (showProfileMenu) {
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                when (event.key) {
+                    Key.DirectionUp -> if (profileMenuIndex > 0) {
+                        profileMenuIndex--
+                        com.arflix.tv.util.NavSound.play()
+                    }
+                    Key.DirectionDown -> if (profileMenuIndex < profiles.size - 1) {
+                        profileMenuIndex++
+                        com.arflix.tv.util.NavSound.play()
+                    }
+                    Key.Enter, Key.DirectionCenter -> {
+                        val chosen = profiles.getOrNull(profileMenuIndex)
+                        showProfileMenu = false
+                        if (chosen != null && chosen.id != currentProfile?.id) {
+                            if (chosen.isLocked && !chosen.pin.isNullOrEmpty()) {
+                                // PIN-locked profile → full picker, which owns the PIN dialog.
+                                onSwitchProfile()
+                            } else {
+                                onProfileSelected(chosen)
+                            }
+                        }
+                    }
+                    Key.Back, Key.Escape -> showProfileMenu = false
+                    else -> Unit
+                }
+                return@onPreviewKeyEvent true
             }
             if (trailerIsPlaying && event.type == KeyEventType.KeyDown &&
                 (isArvioDpadNavigationKey(event.key) || event.key == Key.Enter || event.key == Key.DirectionCenter || event.key == Key.Back)
@@ -2604,7 +2662,15 @@ internal fun HomeInputLayer(
                         // to distinguish tap (navigate) from long-press (context menu).
                         if (focusState.isSidebarFocused) {
                             if (hasProfile && focusState.sidebarFocusIndex == 0) {
-                                onSwitchProfile()
+                                if (profiles.size > 1) {
+                                    profileMenuIndex = profiles
+                                        .indexOfFirst { it.id == currentProfile?.id }
+                                        .coerceAtLeast(0)
+                                    showProfileMenu = true
+                                    com.arflix.tv.util.NavSound.playSelect()
+                                } else {
+                                    onSwitchProfile()
+                                }
                             } else {
                                 when (topBarFocusedItem(focusState.sidebarFocusIndex, hasProfile)) {
                                     SidebarItem.SEARCH -> onNavigateToSearch()
@@ -2817,6 +2883,19 @@ internal fun HomeInputLayer(
                 clockFormat = clockFormat,
                 hasUpdateBadge = hasUpdateBadge
             )
+
+            if (showProfileMenu) {
+                ProfileSwitcherDropdown(
+                    profiles = profiles,
+                    currentProfileId = currentProfile?.id,
+                    focusedIndex = profileMenuIndex,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        // Anchored under the top-bar avatar (28dp start padding, 82dp bar).
+                        .padding(start = AppTopBarHorizontalPadding, top = 76.dp)
+                        .zIndex(30f)
+                )
+            }
         }
 
         HomeRowsLayer(
@@ -4068,4 +4147,87 @@ private fun ContentRow(
             }
         }  // Close Box
     }  // Close Column
+}
+
+/**
+ * ADIK: tooltip-style profile switcher, anchored under the top-bar avatar.
+ * Left-aligned panel with a pointy caret aiming up at the avatar. Index-driven
+ * highlight (no real focus) — D-pad handling lives in HomeContent's key handler.
+ */
+@Composable
+private fun ProfileSwitcherDropdown(
+    profiles: List<com.arflix.tv.data.model.Profile>,
+    currentProfileId: String?,
+    focusedIndex: Int,
+    modifier: Modifier = Modifier
+) {
+    val panelColor = Color(0xF21C1C1E)
+    Column(modifier = modifier) {
+        // Pointy caret, left-aligned so it points at the avatar above.
+        Canvas(
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .size(width = 18.dp, height = 9.dp)
+        ) {
+            val path = Path().apply {
+                moveTo(size.width / 2f, 0f)
+                lineTo(0f, size.height)
+                lineTo(size.width, size.height)
+                close()
+            }
+            drawPath(path, panelColor)
+        }
+        Column(
+            modifier = Modifier
+                .width(236.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(panelColor)
+                .padding(vertical = 8.dp, horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            profiles.forEachIndexed { index, profile ->
+                val isHighlighted = index == focusedIndex
+                val isCurrent = profile.id == currentProfileId
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isHighlighted) Color.White else Color.Transparent)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(7.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ProfileAvatarVisual(
+                            profile = profile,
+                            letterFontSize = 12.sp,
+                            iconPadding = 3.dp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = profile.name,
+                        fontSize = 15.sp,
+                        fontWeight = if (isHighlighted) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isHighlighted) Color.Black else Color.White.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isCurrent) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = if (isHighlighted) Color.Black else Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

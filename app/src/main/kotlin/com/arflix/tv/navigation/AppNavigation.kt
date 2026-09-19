@@ -248,6 +248,15 @@ fun AppNavigation(
                     onSwitchProfile()
                     navController.navigateToProfileSelection()
                 },
+                onProfileSwitched = {
+                    // In-place switch from the avatar dropdown: rebuild the Home
+                    // entry so HomeViewModel reloads for the new profile.
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true; saveState = false }
+                        launchSingleTop = true
+                        restoreState = false
+                    }
+                },
                 onExitApp = onExitApp
             )
         }
