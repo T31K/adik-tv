@@ -721,6 +721,10 @@ fun HomeScreen(
     val profileSwitchViewModel: com.arflix.tv.ui.screens.profile.ProfileViewModel = hiltViewModel()
     val profileSwitchState by profileSwitchViewModel.uiState.collectAsStateWithLifecycle()
     var pendingSwitchProfile by remember { mutableStateOf<com.arflix.tv.data.model.Profile?>(null) }
+    // Hoisted here (not in HomeContent) so the dropdown can draw above the
+    // cinematic hero layer, which is a later sibling of HomeContent.
+    var showProfileMenu by remember { mutableStateOf(false) }
+    var profileMenuIndex by remember { mutableIntStateOf(0) }
     LaunchedEffect(pendingSwitchProfile, profileSwitchState.isSwitchingProfile, profileSwitchState.activeProfile?.id) {
         val target = pendingSwitchProfile ?: return@LaunchedEffect
         if (!profileSwitchState.isSwitchingProfile && profileSwitchState.activeProfile?.id == target.id) {
@@ -1370,6 +1374,10 @@ fun HomeScreen(
                 pendingSwitchProfile = chosen
                 profileSwitchViewModel.selectProfile(chosen)
             },
+            showProfileMenu = showProfileMenu,
+            profileMenuIndex = profileMenuIndex,
+            onShowProfileMenuChange = { showProfileMenu = it },
+            onProfileMenuIndexChange = { profileMenuIndex = it },
             onExitApp = onExitApp,
             featuredTrailerKey = null,
             featuredTrailerDelayMs = uiState.trailerDelaySeconds * 1000L,
@@ -1429,6 +1437,26 @@ fun HomeScreen(
                         Text(stringResource(R.string.retry))
                     }
                 }
+            }
+        }
+
+        // Profile switcher dropdown — drawn at screen level so it sits above
+        // the cinematic hero layer and every home row.
+        if (!isMobile && showProfileMenu) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(125f)
+            ) {
+                ProfileSwitcherDropdown(
+                    profiles = profileSwitchState.profiles,
+                    currentProfileId = currentProfile?.id,
+                    focusedIndex = profileMenuIndex,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        // Anchored under the top-bar avatar (28dp start padding, 82dp bar).
+                        .padding(start = AppTopBarHorizontalPadding, top = 76.dp)
+                )
             }
         }
 
@@ -2476,6 +2504,10 @@ internal fun HomeInputLayer(
     onSwitchProfile: () -> Unit,
     profiles: List<com.arflix.tv.data.model.Profile> = emptyList(),
     onProfileSelected: (com.arflix.tv.data.model.Profile) -> Unit = {},
+    showProfileMenu: Boolean = false,
+    profileMenuIndex: Int = 0,
+    onShowProfileMenuChange: (Boolean) -> Unit = {},
+    onProfileMenuIndexChange: (Int) -> Unit = {},
     onExitApp: () -> Unit,
     featuredTrailerKey: String? = null,
     featuredTrailerDelayMs: Long = 0L,
@@ -2487,9 +2519,6 @@ internal fun HomeInputLayer(
     var selectPressedInHome by remember { mutableStateOf(false) }
     var selectDownAtMs by remember { mutableLongStateOf(0L) }
     var rootHasFocus by remember { mutableStateOf(false) }
-    // ADIK: tooltip-style profile switcher anchored under the top-bar avatar.
-    var showProfileMenu by remember { mutableStateOf(false) }
-    var profileMenuIndex by remember { mutableIntStateOf(0) }
     val focusRecoveryDelayMs = 180L
     val dpadRepeatGate = rememberArvioDpadRepeatGate(
         horizontalMinRepeatIntervalMs = 80L,
@@ -2537,7 +2566,7 @@ internal fun HomeInputLayer(
         selectPressedInHome = false
         selectDownAtMs = 0L
         if (showProfileMenu) {
-            showProfileMenu = false
+            onShowProfileMenuChange(false)
         } else if (focusState.isSidebarFocused) {
             onExitApp()
         } else {
@@ -2560,16 +2589,16 @@ internal fun HomeInputLayer(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
                 when (event.key) {
                     Key.DirectionUp -> if (profileMenuIndex > 0) {
-                        profileMenuIndex--
+                        onProfileMenuIndexChange(profileMenuIndex - 1)
                         com.arflix.tv.util.NavSound.play()
                     }
                     Key.DirectionDown -> if (profileMenuIndex < profiles.size - 1) {
-                        profileMenuIndex++
+                        onProfileMenuIndexChange(profileMenuIndex + 1)
                         com.arflix.tv.util.NavSound.play()
                     }
                     Key.Enter, Key.DirectionCenter -> {
                         val chosen = profiles.getOrNull(profileMenuIndex)
-                        showProfileMenu = false
+                        onShowProfileMenuChange(false)
                         if (chosen != null && chosen.id != currentProfile?.id) {
                             if (chosen.isLocked && !chosen.pin.isNullOrEmpty()) {
                                 // PIN-locked profile → full picker, which owns the PIN dialog.
@@ -2579,7 +2608,7 @@ internal fun HomeInputLayer(
                             }
                         }
                     }
-                    Key.Back, Key.Escape -> showProfileMenu = false
+                    Key.Back, Key.Escape -> onShowProfileMenuChange(false)
                     else -> Unit
                 }
                 return@onPreviewKeyEvent true
@@ -2663,10 +2692,12 @@ internal fun HomeInputLayer(
                         if (focusState.isSidebarFocused) {
                             if (hasProfile && focusState.sidebarFocusIndex == 0) {
                                 if (profiles.size > 1) {
-                                    profileMenuIndex = profiles
-                                        .indexOfFirst { it.id == currentProfile?.id }
-                                        .coerceAtLeast(0)
-                                    showProfileMenu = true
+                                    onProfileMenuIndexChange(
+                                        profiles
+                                            .indexOfFirst { it.id == currentProfile?.id }
+                                            .coerceAtLeast(0)
+                                    )
+                                    onShowProfileMenuChange(true)
                                     com.arflix.tv.util.NavSound.playSelect()
                                 } else {
                                     onSwitchProfile()
@@ -2883,19 +2914,6 @@ internal fun HomeInputLayer(
                 clockFormat = clockFormat,
                 hasUpdateBadge = hasUpdateBadge
             )
-
-            if (showProfileMenu) {
-                ProfileSwitcherDropdown(
-                    profiles = profiles,
-                    currentProfileId = currentProfile?.id,
-                    focusedIndex = profileMenuIndex,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        // Anchored under the top-bar avatar (28dp start padding, 82dp bar).
-                        .padding(start = AppTopBarHorizontalPadding, top = 76.dp)
-                        .zIndex(30f)
-                )
-            }
         }
 
         HomeRowsLayer(
