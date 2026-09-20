@@ -85,6 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -148,9 +149,30 @@ data class AiKeyServerState(
     val keyReceived: Boolean = false
 )
 
+/** ADIK: one row in the Settings → Downloads section. */
+data class DownloadItemUi(
+    val id: String,
+    val title: String,
+    val status: com.arflix.tv.data.model.DownloadStatus,
+    val progress: Float,
+    val sizeBytes: Long?
+)
+
+/** ADIK: everything the Settings → Downloads section renders. */
+data class DownloadsUi(
+    val active: com.arflix.tv.megaflix.ActiveDownload? = null, // live MB/s + ETA for the item torrenting now
+    val downloading: List<DownloadItemUi> = emptyList(),
+    val queued: List<DownloadItemUi> = emptyList(),
+    val paused: List<DownloadItemUi> = emptyList(),
+    val failed: List<DownloadItemUi> = emptyList(),
+    val readyCount: Int = 0
+)
+
 data class SettingsUiState(
     // ADIK: which family TV this is (Constants.MEGAFLIX_DEVICE_IDS); null = not set.
     val megaflixDeviceId: String? = null,
+    // ADIK: Settings → Downloads live view (progress, MB/s, queue, failures).
+    val downloads: DownloadsUi = DownloadsUi(),
     val defaultSubtitle: String = "Off",
     val subtitleOptions: List<String> = emptyList(),
     val defaultAudioLanguage: String = "Auto (Original)",
@@ -333,8 +355,26 @@ class SettingsViewModel @Inject constructor(
     private val watchHistoryRepository: com.arflix.tv.data.repository.WatchHistoryRepository,
     private val simklAuthManager: com.arflix.tv.data.repository.simkl.SimklAuthManager,
     private val simklSyncService: com.arflix.tv.data.repository.simkl.SimklSyncService,
-    private val megaflixStore: com.arflix.tv.megaflix.DownloadStateStore
+    private val megaflixStore: com.arflix.tv.megaflix.DownloadStateStore,
+    private val megaflixDownloadManager: com.arflix.tv.megaflix.MegaflixDownloadManager,
+    private val megaflixSyncManager: com.arflix.tv.megaflix.MegaflixSyncManager
 ) : ViewModel() {
+    /** ADIK: Settings → Downloads per-item controls. Start also kicks the drain service. */
+    fun startDownload(id: String) {
+        viewModelScope.launch {
+            megaflixDownloadManager.start(id)
+            runCatching { com.arflix.tv.megaflix.DownloadService.start(context) }
+        }
+    }
+
+    fun pauseDownload(id: String) {
+        viewModelScope.launch { megaflixDownloadManager.pause(id) }
+    }
+
+    fun stopDownload(id: String) {
+        viewModelScope.launch { megaflixDownloadManager.stop(id) }
+    }
+
     /** ADIK: the owner types this TV's fleet id once (valid list lives server-side). */
     fun setMegaflixDeviceId(raw: String) {
         viewModelScope.launch {
@@ -506,6 +546,53 @@ class SettingsViewModel @Inject constructor(
         observeCatalogs()
         initializeUpdaterState()
         checkForAppUpdates(force = false, showNoUpdateFeedback = false)
+        observeDownloads()
+    }
+
+    /**
+     * ADIK: feed the Settings → Downloads section. Joins the persisted per-item
+     * records (status + %) with the feed (titles) and the live in-memory
+     * active-download stats (MB/s + ETA, never persisted).
+     */
+    private fun observeDownloads() {
+        viewModelScope.launch {
+            combine(
+                megaflixStore.recordsFlow(),
+                megaflixSyncManager.feedItems,
+                megaflixDownloadManager.activeDownload
+            ) { records, feed, active ->
+                val titles = feed.associate { item ->
+                    val base = item.title.ifBlank { item.id }
+                    val label = if (item.season != null && item.episode != null) {
+                        "$base S${item.season}E${item.episode}"
+                    } else base
+                    item.id to label
+                }
+                fun rows(status: com.arflix.tv.data.model.DownloadStatus) =
+                    records.values
+                        .filter { it.status == status }
+                        .map { r ->
+                            DownloadItemUi(
+                                id = r.id,
+                                title = titles[r.id] ?: r.id,
+                                status = r.status,
+                                progress = r.progress,
+                                sizeBytes = r.sizeBytes
+                            )
+                        }
+                        .sortedBy { it.title.lowercase() }
+                DownloadsUi(
+                    active = active,
+                    downloading = rows(com.arflix.tv.data.model.DownloadStatus.DOWNLOADING),
+                    queued = rows(com.arflix.tv.data.model.DownloadStatus.COMING_SOON),
+                    paused = rows(com.arflix.tv.data.model.DownloadStatus.PAUSED),
+                    failed = rows(com.arflix.tv.data.model.DownloadStatus.FAILED),
+                    readyCount = records.values.count { it.status == com.arflix.tv.data.model.DownloadStatus.READY }
+                )
+            }.collect { downloads ->
+                _uiState.value = _uiState.value.copy(downloads = downloads)
+            }
+        }
     }
 
     private fun observeIptvGroupPrefs() {

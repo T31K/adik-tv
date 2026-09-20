@@ -490,6 +490,7 @@ fun SettingsScreen(
             if (BuildConfig.FEATURE_PLUGINS_ENABLED) {
                 add("plugins")
             }
+            add("downloads")
             add("appearance")
             add("network")
         }
@@ -572,6 +573,8 @@ fun SettingsScreen(
     var showStalkerRename by remember { mutableStateOf(false) }
     var showDeviceIdInput by remember { mutableStateOf(false) }
     var deviceIdInput by remember { mutableStateOf("") }
+    // Settings → Downloads: the item whose Start/Pause/Stop sheet is open (null = closed).
+    var downloadActionTarget by remember { mutableStateOf<DownloadItemUi?>(null) }
     var stalkerRenameId by remember { mutableStateOf("") }
     var stalkerRenameName by remember { mutableStateOf("") }
     var showCatalogInput by remember { mutableStateOf(false) }
@@ -629,6 +632,10 @@ fun SettingsScreen(
             "stremio" -> stremioAddons.size + 1 // rows + refresh + add button
             "plugins" -> pluginsMaxIndex
             "accounts" -> 16 // Includes About & Credits + device id.
+            "downloads" -> with(uiState.downloads) {
+                // One focus slot per navigable row: downloading + queued + paused + failed.
+                (downloading.size + queued.size + paused.size + failed.size - 1).coerceAtLeast(0)
+            }
             else -> 0
         }
     }
@@ -880,7 +887,8 @@ fun SettingsScreen(
         uiState.isPackLoading ||
         uiState.packError != null ||
         uiState.pendingPackManifest != null ||
-        pluginsModalOpen
+        pluginsModalOpen ||
+        downloadActionTarget != null
 
     // Same D-pad repeat throttle as Home and Details, so holding a direction
     // key walks the settings lists at a readable pace instead of blurring.
@@ -1559,6 +1567,12 @@ fun SettingsScreen(
                                         "plugins" -> {
                                             pluginsEnterTrigger = contentFocusIndex
                                         }
+                                        "downloads" -> {
+                                            // Rows render in this order; OK opens the item's action sheet.
+                                            val d = uiState.downloads
+                                            val all = d.downloading + d.queued + d.paused + d.failed
+                                            all.getOrNull(contentFocusIndex)?.let { downloadActionTarget = it }
+                                        }
                                         else -> Unit
                                     }
                                 }
@@ -1701,6 +1715,7 @@ fun SettingsScreen(
                                     "catalogs" -> Icons.Default.Widgets
                                     "stremio" -> Icons.Default.Extension
                                     "accounts" -> Icons.Default.Person
+                                    "downloads" -> Icons.Default.Download
                                     else -> Icons.Default.Settings
                                 },
                                 title = when (section) {
@@ -1716,6 +1731,7 @@ fun SettingsScreen(
                                     "catalogs" -> stringResource(R.string.catalogs)
                                     "stremio" -> stringResource(R.string.addons)
                                     "accounts" -> stringResource(R.string.accounts)
+                                    "downloads" -> "Downloads"
                                     else -> section.replaceFirstChar { it.uppercase() }
                                 },
                                 isSelected = sectionIndex == index,
@@ -2165,6 +2181,10 @@ fun SettingsScreen(
                                 showDeviceIdInput = true
                             },
                         )
+                        "downloads" -> DownloadsSettings(
+                            downloads = uiState.downloads,
+                            focusedIndex = if (activeZone == Zone.CONTENT) contentFocusIndex else -1
+                        )
                     }
                   }
                 }
@@ -2466,6 +2486,16 @@ fun SettingsScreen(
                     showDeviceIdInput = false
                 },
                 onDismiss = { showDeviceIdInput = false }
+            )
+        }
+
+        downloadActionTarget?.let { target ->
+            DownloadActionsDialog(
+                item = target,
+                onStart = { viewModel.startDownload(target.id); downloadActionTarget = null },
+                onPause = { viewModel.pauseDownload(target.id); downloadActionTarget = null },
+                onStop = { viewModel.stopDownload(target.id); downloadActionTarget = null },
+                onDismiss = { downloadActionTarget = null }
             )
         }
 
@@ -5797,6 +5827,7 @@ private fun tvSettingsSectionTitle(section: String): String {
         "catalogs" -> stringResource(R.string.catalogs)
         "stremio" -> stringResource(R.string.addons)
         "accounts" -> stringResource(R.string.accounts)
+        "downloads" -> "Downloads"
         else -> section.replaceFirstChar { it.uppercase() }
     }
 }
@@ -5816,6 +5847,7 @@ private fun tvSettingsSectionDescription(section: String): String {
         "catalogs" -> stringResource(R.string.settings_desc_catalogs)
         "stremio" -> stringResource(R.string.settings_desc_stremio)
         "accounts" -> stringResource(R.string.settings_desc_accounts)
+        "downloads" -> "Live progress of everything downloading to the drive"
         else -> stringResource(R.string.settings_desc_default)
     }
 }
@@ -5865,6 +5897,13 @@ private fun tvSettingsSectionPills(
             if (uiState.isTraktAuthenticated) stringResource(R.string.settings_trakt_connected) else stringResource(R.string.settings_trakt_off),
             if (uiState.isForceCloudSyncing) stringResource(R.string.syncing) else stringResource(R.string.settings_ready)
         )
+        "downloads" -> with(uiState.downloads) {
+            listOf(
+                "${downloading.size} downloading",
+                "${queued.size} queued",
+                "$readyCount ready"
+            )
+        }
         else -> emptyList()
     }
 }
@@ -9219,6 +9258,453 @@ private fun AddonRow(
                     isDestructive = true,
                     onClick = onDelete
                 )
+            }
+        }
+    }
+}
+
+/**
+ * ADIK: Settings → Downloads. Read-only live view of the torrent queue —
+ * what's downloading now (with MB/s + ETA), what's queued, what failed, and
+ * how many titles are already on the drive. Data comes from
+ * [SettingsUiState.downloads] (see SettingsViewModel.observeDownloads).
+ */
+@Composable
+private fun DownloadsSettings(
+    downloads: DownloadsUi,
+    focusedIndex: Int
+) {
+    val context = LocalContext.current
+    val isEmpty = downloads.downloading.isEmpty() &&
+        downloads.queued.isEmpty() &&
+        downloads.paused.isEmpty() &&
+        downloads.failed.isEmpty()
+
+    // Focus slots are assigned in render order: downloading, then queued, then failed.
+    var slot = 0
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // ── Summary strip ──
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(BackgroundElevated)
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            DownloadStat("Downloading", downloads.downloading.size.toString(), Pink)
+            DownloadStat("Queued", downloads.queued.size.toString(), TextSecondary)
+            DownloadStat("Paused", downloads.paused.size.toString(), if (downloads.paused.isEmpty()) TextSecondary else Color(0xFFF5A623))
+            DownloadStat("Failed", downloads.failed.size.toString(), if (downloads.failed.isEmpty()) TextSecondary else Color(0xFFE5484D))
+            DownloadStat("On drive", downloads.readyCount.toString(), SuccessGreen)
+        }
+
+        if (!isEmpty) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Press OK on any item to start, pause or stop it.",
+                style = ArflixTypography.caption.copy(fontSize = 12.sp),
+                color = TextSecondary.copy(alpha = 0.7f),
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+
+        if (isEmpty) {
+            Spacer(Modifier.height(28.dp))
+            Text(
+                text = "Nothing downloading right now.",
+                style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
+                color = TextPrimary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "New titles added on the server start downloading here within a minute or so. " +
+                    "${downloads.readyCount} already on the drive.",
+                style = ArflixTypography.caption.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                color = TextSecondary
+            )
+            return@Column
+        }
+
+        // ── Downloading now ──
+        if (downloads.downloading.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            DownloadGroupLabel("DOWNLOADING NOW")
+            downloads.downloading.forEach { item ->
+                val index = slot++
+                val active = downloads.active?.takeIf { it.id == item.id }
+                DownloadingCard(
+                    item = item,
+                    active = active,
+                    isFocused = focusedIndex == index,
+                    context = context,
+                    modifier = Modifier.settingsFocusSlot(index)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        // ── Queued ──
+        if (downloads.queued.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            DownloadGroupLabel("QUEUED")
+            downloads.queued.forEach { item ->
+                val index = slot++
+                SimpleDownloadRow(
+                    title = item.title,
+                    trailing = item.sizeBytes?.let { formatBytes(context, it) } ?: "",
+                    dotColor = TextSecondary.copy(alpha = 0.6f),
+                    isFocused = focusedIndex == index,
+                    modifier = Modifier.settingsFocusSlot(index)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        // ── Paused ──
+        if (downloads.paused.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            DownloadGroupLabel("PAUSED")
+            downloads.paused.forEach { item ->
+                val index = slot++
+                SimpleDownloadRow(
+                    title = item.title,
+                    trailing = if (item.progress > 0f) "${(item.progress * 100).toInt()}%" else "Paused",
+                    dotColor = Color(0xFFF5A623),
+                    isFocused = focusedIndex == index,
+                    modifier = Modifier.settingsFocusSlot(index)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        // ── Failed ──
+        if (downloads.failed.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            DownloadGroupLabel("FAILED — WILL RETRY")
+            downloads.failed.forEach { item ->
+                val index = slot++
+                SimpleDownloadRow(
+                    title = item.title,
+                    trailing = "Retrying",
+                    dotColor = Color(0xFFE5484D),
+                    isFocused = focusedIndex == index,
+                    modifier = Modifier.settingsFocusSlot(index)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun DownloadStat(label: String, value: String, valueColor: Color) {
+    Column {
+        Text(
+            text = value,
+            style = ArflixTypography.cardTitle.copy(fontSize = 22.sp),
+            color = valueColor
+        )
+        Text(
+            text = label.uppercase(),
+            style = ArflixTypography.caption.copy(fontSize = 10.sp, letterSpacing = 0.8.sp),
+            color = TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun DownloadGroupLabel(label: String) {
+    Text(
+        text = label,
+        style = ArflixTypography.caption.copy(fontSize = 11.sp, letterSpacing = 1.sp),
+        color = TextSecondary.copy(alpha = 0.7f),
+        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
+    )
+}
+
+@Composable
+private fun DownloadingCard(
+    item: DownloadItemUi,
+    active: com.arflix.tv.megaflix.ActiveDownload?,
+    isFocused: Boolean,
+    context: android.content.Context,
+    modifier: Modifier = Modifier
+) {
+    val accent = resolveAccentColor(fallback = Pink)
+    // Prefer the live stat when this is the item torrenting right now; fall back
+    // to the persisted record's coarse % otherwise.
+    val progress = (active?.progress ?: item.progress).coerceIn(0f, 1f)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isFocused) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.05f))
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) accent else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = item.title,
+                style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = ArflixTypography.cardTitle.copy(fontSize = 15.sp),
+                color = accent
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        // Progress bar (custom — avoids pulling in a Material progress component).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color.White.copy(alpha = 0.12f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(accent)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        val downloaded = active?.downloadedBytes?.takeIf { it > 0L }
+        val sizeText = when {
+            downloaded != null && item.sizeBytes != null ->
+                "${formatBytes(context, downloaded)} / ${formatBytes(context, item.sizeBytes)}"
+            item.sizeBytes != null -> formatBytes(context, item.sizeBytes)
+            else -> ""
+        }
+        val speedText = active?.let { formatSpeed(context, it.speedBps) }
+        val etaText = active?.etaSeconds?.let { "${formatEta(it)} left" }
+        val detail = listOfNotNull(
+            sizeText.takeIf { it.isNotBlank() },
+            speedText,
+            etaText,
+            active?.peers?.takeIf { it > 0 }?.let { "$it peers" }
+        ).joinToString("  ·  ")
+        Text(
+            text = if (detail.isNotBlank()) detail else "Connecting…",
+            style = ArflixTypography.caption.copy(fontSize = 13.sp),
+            color = TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun SimpleDownloadRow(
+    title: String,
+    trailing: String,
+    dotColor: Color,
+    isFocused: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val accent = resolveAccentColor(fallback = Pink)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isFocused) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.05f))
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) accent else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(dotColor)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = title,
+                style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (trailing.isNotBlank()) {
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = trailing,
+                style = ArflixTypography.caption.copy(fontSize = 13.sp),
+                color = TextSecondary
+            )
+        }
+    }
+}
+
+private fun formatBytes(context: android.content.Context, bytes: Long): String =
+    android.text.format.Formatter.formatShortFileSize(context, bytes.coerceAtLeast(0L))
+
+private fun formatSpeed(context: android.content.Context, bytesPerSecond: Long): String =
+    if (bytesPerSecond <= 0L) "0 B/s"
+    else android.text.format.Formatter.formatShortFileSize(context, bytesPerSecond) + "/s"
+
+private fun formatEta(seconds: Long): String {
+    if (seconds <= 0L) return "0s"
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m ${s}s"
+        else -> "${s}s"
+    }
+}
+
+private data class DownloadAction(val label: String, val color: Color, val onClick: () -> Unit)
+
+/**
+ * ADIK: Start / Pause / Stop sheet for one download. Actions offered depend on
+ * the item's status. DPAD up/down moves between buttons, OK activates, Back
+ * dismisses.
+ */
+@Composable
+private fun DownloadActionsDialog(
+    item: DownloadItemUi,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onStop: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val accent = resolveAccentColor(fallback = Pink)
+    val amber = Color(0xFFF5A623)
+    val red = Color(0xFFE5484D)
+    val green = SuccessGreen
+
+    val actions = remember(item.id, item.status) {
+        buildList {
+            when (item.status) {
+                com.arflix.tv.data.model.DownloadStatus.DOWNLOADING,
+                com.arflix.tv.data.model.DownloadStatus.COMING_SOON -> {
+                    add(DownloadAction("Pause", amber, onPause))
+                    add(DownloadAction("Stop", red, onStop))
+                }
+                com.arflix.tv.data.model.DownloadStatus.PAUSED -> {
+                    add(DownloadAction("Start", green, onStart))
+                    add(DownloadAction("Stop", red, onStop))
+                }
+                com.arflix.tv.data.model.DownloadStatus.FAILED -> {
+                    add(DownloadAction("Retry", green, onStart))
+                    add(DownloadAction("Stop", red, onStop))
+                }
+                com.arflix.tv.data.model.DownloadStatus.READY -> {}
+            }
+            add(DownloadAction("Cancel", TextSecondary, onDismiss))
+        }
+    }
+
+    var focusedIndex by remember(item.id) { mutableIntStateOf(0) }
+    val dialogFocus = remember { FocusRequester() }
+    LaunchedEffect(item.id) { dialogFocus.requestFocus() }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        BackHandler { onDismiss() }
+        ModalScrim(onDismiss = onDismiss) {
+            Column(
+                modifier = Modifier
+                    .width(440.dp)
+                    .background(BackgroundElevated, RoundedCornerShape(14.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                    .padding(24.dp)
+                    .focusRequester(dialogFocus)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (event.key) {
+                            Key.DirectionUp -> {
+                                focusedIndex = (focusedIndex - 1 + actions.size) % actions.size
+                                true
+                            }
+                            Key.DirectionDown -> {
+                                focusedIndex = (focusedIndex + 1) % actions.size
+                                true
+                            }
+                            Key.Enter, Key.DirectionCenter -> {
+                                actions.getOrNull(focusedIndex)?.onClick?.invoke()
+                                true
+                            }
+                            Key.Back -> { onDismiss(); true }
+                            else -> false
+                        }
+                    }
+            ) {
+                Text(
+                    text = "Manage download",
+                    style = ArflixTypography.cardTitle.copy(fontSize = 18.sp),
+                    color = TextPrimary
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = item.title,
+                    style = ArflixTypography.caption.copy(fontSize = 13.sp),
+                    color = TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(18.dp))
+                actions.forEachIndexed { index, action ->
+                    val isFocused = focusedIndex == index
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isFocused) action.color.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.05f))
+                            .border(
+                                width = if (isFocused) 2.dp else 0.dp,
+                                color = if (isFocused) action.color else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clickable { action.onClick() }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = action.label,
+                            style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
+                            color = if (isFocused) action.color else TextPrimary
+                        )
+                    }
+                    if (index < actions.lastIndex) Spacer(Modifier.height(8.dp))
+                }
             }
         }
     }

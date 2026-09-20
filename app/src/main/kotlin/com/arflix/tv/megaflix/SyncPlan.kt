@@ -26,9 +26,14 @@ object SyncPlanner {
             when {
                 // File on the drive → always READY (covers pre-seeded drives and completed downloads).
                 file != null -> DownloadRecord(item.id, DownloadStatus.READY, file, 1f, item.sizeBytes)
-                // No file, but a download was already underway/failed → preserve that state.
-                prev != null && (prev.status == DownloadStatus.DOWNLOADING || prev.status == DownloadStatus.FAILED) ->
-                    prev.copy(sizeBytes = item.sizeBytes ?: prev.sizeBytes)
+                // No file, but a download was already underway/failed, or the user
+                // paused/stopped it → preserve that state (never silently re-queue a
+                // PAUSED item, or the auto-sync would fight the user's choice).
+                prev != null && (
+                    prev.status == DownloadStatus.DOWNLOADING ||
+                    prev.status == DownloadStatus.FAILED ||
+                    prev.status == DownloadStatus.PAUSED
+                ) -> prev.copy(sizeBytes = item.sizeBytes ?: prev.sizeBytes)
                 // Otherwise it's queued.
                 else -> DownloadRecord(item.id, DownloadStatus.COMING_SOON, null, 0f, item.sizeBytes)
             }
