@@ -153,6 +153,7 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -1213,6 +1214,12 @@ fun PlayerScreen(
             .build().apply {
                 // Ensure volume is at maximum
                 volume = 1.0f
+                // Scrub/skip on the nearest keyframe instead of an EXACT seek. EXACT forces a
+                // decode from the preceding keyframe up to the requested frame on every seek, which
+                // re-buffers a whole GOP on remote/4K streams and makes each skip slow to land.
+                // CLOSEST_SYNC snaps to the nearest I-frame (±~a GOP) so seeks are near-instant,
+                // matching how native streaming players scrub.
+                setSeekParameters(SeekParameters.CLOSEST_SYNC)
                 setVideoFrameMetadataListener { presentationTimeUs, _, format, _ ->
                     lastRenderedVideoFrameUs.set(presentationTimeUs)
                     playbackFrameRate.onFrame(presentationTimeUs, format.frameRate)
