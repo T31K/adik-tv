@@ -288,33 +288,19 @@ class MegaflixDownloadManager @Inject constructor(
      * drain service. This is what unwedges a dead/slow torrent hogging the queue.
      */
     suspend fun pollAndHeal() {
-        val active = _activeDownload.value
-        if (active != null) {
-            val prev = lastPollProgress
-            lastPollProgress = active.progress
-            val crawling = active.speedBps < STALL_BPS &&
-                (prev != null && active.progress - prev < 0.005f)
-            if (crawling) {
-                pollStrikes += 1
-                if (pollStrikes >= STALL_STRIKES) {
-                    pollStrikes = 0
-                    lastPollProgress = null
-                    swapToNextMagnet(active.id)
-                }
-            } else {
-                pollStrikes = 0
-            }
-        } else {
-            lastPollProgress = null
-            pollStrikes = 0
-            val lacking = store.all().values.any {
-                it.status == DownloadStatus.COMING_SOON ||
-                    it.status == DownloadStatus.FAILED ||
-                    it.status == DownloadStatus.DOWNLOADING
-            }
-            if (lacking && StoragePermission.hasAllFilesAccess()) {
-                runCatching { DownloadService.start(context) }
-            }
+        // Auto-swap is DISABLED alongside the interrupt (see TorrentEngine): stopping
+        // a live torrent SIGSEGVs, and swapping without a working stop only re-queues
+        // the record while the download keeps running — which wedges the drain and
+        // makes the tab read "0 downloading". So the poller no longer swaps; it just
+        // re-kicks the drain when it's idle with work still pending.
+        if (_activeDownload.value != null) return
+        val lacking = store.all().values.any {
+            it.status == DownloadStatus.COMING_SOON ||
+                it.status == DownloadStatus.FAILED ||
+                it.status == DownloadStatus.DOWNLOADING
+        }
+        if (lacking && StoragePermission.hasAllFilesAccess()) {
+            runCatching { DownloadService.start(context) }
         }
     }
 

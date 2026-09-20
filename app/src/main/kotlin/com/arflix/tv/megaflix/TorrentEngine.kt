@@ -63,11 +63,17 @@ class TorrentEngine @Inject constructor() {
         if (session.isRunning) session.stop()
     }
 
-    /** Pause the item torrenting right now (keeps partial data on disk). No-op if idle. */
-    fun requestPause() { currentInterrupt?.complete(Interruption.PAUSE) }
-
-    /** Stop the item torrenting right now (the manager then discards partial data). No-op if idle. */
-    fun requestStop() { currentInterrupt?.complete(Interruption.STOP) }
+    // DISABLED (crash guard): interrupting a live torrent means calling
+    // session.remove()/handle.pause() from this coroutine thread while
+    // libtorrent's alert thread is reading the same handle — concurrent native
+    // access that SIGSEGVs in libtorrent4j (reproduced on both). Tonight the
+    // auto-swap poller called this on a stalled torrent and took the app down.
+    // Until all native calls are funnelled onto one thread, we never interrupt a
+    // live torrent: it runs to completion. Pause/Stop of QUEUED items still works
+    // (store-only, in the manager). These stay no-ops so download() only ever
+    // resolves via natural completion.
+    fun requestPause() { /* no-op — see crash guard note */ }
+    fun requestStop() { /* no-op — see crash guard note */ }
 
     /**
      * Downloads [magnetUri] into [saveDir], reporting live [TorrentProgress] on
