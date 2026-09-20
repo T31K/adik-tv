@@ -21,9 +21,15 @@ data class FeedItemDto(
     @SerializedName("title") val title: String = "",
     @SerializedName("description") val description: String? = null,
     @SerializedName("link") val link: String = "",
+    // Ranked alternates (best-seeded first). The app downloads links[linkIndex]
+    // and the stall poller swaps down the list. Empty on old feeds → fall back to [link].
+    @SerializedName("links") val links: List<String> = emptyList(),
     @SerializedName("path") val path: String = "",
     @SerializedName("sizeBytes") val sizeBytes: Long? = null
-)
+) {
+    /** The usable magnet list — the baked alternates, or just [link] on old feeds. */
+    fun magnets(): List<String> = links.ifEmpty { if (link.isBlank()) emptyList() else listOf(link) }
+}
 
 @Keep
 data class RevResponseDto(

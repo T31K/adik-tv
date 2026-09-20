@@ -1,7 +1,9 @@
 package com.arflix.tv.megaflix
 
+import android.content.Context
 import android.util.Log
 import com.arflix.tv.data.model.DownloadStatus
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,7 @@ data class ActiveDownload(
 
 @Singleton
 class MegaflixDownloadManager @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val engine: TorrentEngine,
     private val store: DownloadStateStore,
     private val driveManager: DriveManager,
@@ -37,23 +40,33 @@ class MegaflixDownloadManager @Inject constructor(
     private val _activeDownload = MutableStateFlow<ActiveDownload?>(null)
     /** The item torrenting right now (or null when idle). Live speed/ETA. */
     val activeDownload: StateFlow<ActiveDownload?> = _activeDownload.asStateFlow()
+
+    // Stall-poller bookkeeping (see pollAndHeal): last progress seen and how many
+    // consecutive polls the active item has been crawling.
+    private var lastPollProgress: Float? = null
+    private var pollStrikes = 0
+
     /** Downloads the next queued item. Returns false when nothing is queued. */
     suspend fun runOnce(): Boolean {
         val records = store.all()
         val id = DownloadQueue.nextToDownload(records) ?: return false
         val feedItem = syncManager.feedItems.value.firstOrNull { it.id == id } ?: return false
         val mediaDir = driveManager.mediaDir() ?: return false
+        // Which ranked magnet to use — a stall swap advances linkIndex on the record.
+        val magnets = feedItem.magnets()
+        val linkIndex = (records[id]?.linkIndex ?: 0).coerceIn(0, (magnets.size - 1).coerceAtLeast(0))
+        val magnet = magnets.getOrNull(linkIndex) ?: return false
         // Download into a per-item temp subfolder so the "largest video" we pick is THIS
         // torrent's file only — never another movie already sitting in Megaflix/.
         val tmpDir = File(mediaDir, ".dl_$id")
         tmpDir.mkdirs()
 
-        store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes)))
+        store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes, linkIndex)))
         _activeDownload.value = ActiveDownload(id, 0f, 0L, 0L, null, 0)
         return try {
             var lastPersisted = 0f
             var lastProgress = 0f
-            val outcome = engine.download(feedItem.link, tmpDir) { tp ->
+            val outcome = engine.download(magnet, tmpDir) { tp ->
                 lastProgress = tp.progress
                 // Live, unthrottled: drives the Settings MB/s + ETA read-out.
                 _activeDownload.value = ActiveDownload(
@@ -68,7 +81,7 @@ class MegaflixDownloadManager @Inject constructor(
                 if (tp.progress - lastPersisted >= 0.01f || tp.progress >= 1f) {
                     lastPersisted = tp.progress
                     runBlocking {
-                        store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, tp.progress, feedItem.sizeBytes)))
+                        store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, tp.progress, feedItem.sizeBytes, linkIndex)))
                     }
                 }
             }
@@ -79,22 +92,27 @@ class MegaflixDownloadManager @Inject constructor(
                     val target = File(mediaDir, feedItem.path)
                     val finalFile = finalizeToFlat(outcome.file, target)
                     tmpDir.deleteRecursively()
-                    store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes)))
+                    store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes, linkIndex)))
                 }
                 is DownloadOutcome.Interrupted -> when (outcome.mode) {
                     // PAUSE: keep the partial data in .dl_<id> so Start can resume it.
                     Interruption.PAUSE ->
-                        store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, lastProgress, feedItem.sizeBytes)))
-                    // STOP: discard the partial data; a later Start re-downloads from scratch.
+                        store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, lastProgress, feedItem.sizeBytes, linkIndex)))
+                    // STOP: discard the partial data. But a magnet swap also stops the
+                    // torrent after re-queueing the record as COMING_SOON with the next
+                    // linkIndex — don't clobber that. Only a genuine user Stop (record
+                    // still DOWNLOADING here) becomes PAUSED.
                     Interruption.STOP -> {
                         tmpDir.deleteRecursively()
-                        store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, 0f, feedItem.sizeBytes)))
+                        if (store.all()[id]?.status == DownloadStatus.DOWNLOADING) {
+                            store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, 0f, feedItem.sizeBytes, linkIndex)))
+                        }
                     }
                 }
             }
             true
         } catch (t: Throwable) {
-            store.putAll(listOf(DownloadRecord(id, DownloadStatus.FAILED, null, 0f, feedItem.sizeBytes)))
+            store.putAll(listOf(DownloadRecord(id, DownloadStatus.FAILED, null, 0f, feedItem.sizeBytes, linkIndex)))
             true // keep draining; the failed item will retry on a later cycle
         } finally {
             _activeDownload.value = null
@@ -170,11 +188,12 @@ class MegaflixDownloadManager @Inject constructor(
                 dir.deleteRecursively()
                 continue
             }
+            val li = records[id]?.linkIndex ?: 0
             val target = File(mediaDir, feedItem.path)
             if (target.exists() && target.length() > 0) {
                 Log.i(TAG, "recover: flat file already present for $id, pruning temp folder")
                 dir.deleteRecursively()
-                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, target.absolutePath, 1f, feedItem.sizeBytes)))
+                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, target.absolutePath, 1f, feedItem.sizeBytes, li)))
                 continue
             }
             val video = dir.walkTopDown()
@@ -182,8 +201,12 @@ class MegaflixDownloadManager @Inject constructor(
                 .maxByOrNull { it.length() }
                 ?: continue
             val expected = feedItem.sizeBytes
+            // 0.95, not 0.99: the curated sizeBytes is an estimate and often counts
+            // the whole release (subs/nfo/art), so a complete multi-file torrent's
+            // video file alone lands a couple percent under it. 0.99 wrongly re-
+            // downloaded complete movies (Coco, Blade Runner); 0.95 keeps them.
             val complete = if (expected != null && expected > 0) {
-                video.length() >= (expected * 0.99).toLong()
+                video.length() >= (expected * 0.95).toLong()
             } else {
                 video.length() > 50L * 1024 * 1024 // no size hint: accept anything non-trivial
             }
@@ -191,7 +214,7 @@ class MegaflixDownloadManager @Inject constructor(
             runCatching {
                 val finalFile = finalizeToFlat(video, target)
                 dir.deleteRecursively()
-                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes)))
+                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes, li)))
                 Log.i(TAG, "recover: finalized stranded download $id")
             }.onFailure { Log.w(TAG, "recover: could not finalize $id", it) }
         }
@@ -220,8 +243,7 @@ class MegaflixDownloadManager @Inject constructor(
         }
         driveManager.mediaDir()?.let { File(it, ".dl_$id").deleteRecursively() }
         val rec = store.all()[id]
-        val size = rec?.sizeBytes
-        store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, 0f, size)))
+        store.putAll(listOf(DownloadRecord(id, DownloadStatus.PAUSED, null, 0f, rec?.sizeBytes, rec?.linkIndex ?: 0)))
     }
 
     /** Start (or resume) an item: make it eligible for the drainer again. */
@@ -230,6 +252,70 @@ class MegaflixDownloadManager @Inject constructor(
         if (rec.status == DownloadStatus.READY || rec.status == DownloadStatus.DOWNLOADING) return
         // Keep any partial progress from a PAUSE so libtorrent can continue it.
         store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON)))
+        runCatching { DownloadService.start(context) }
+    }
+
+    // ── Stall poller + magnet swap (baked-list resilience) ──────────────────
+
+    /**
+     * Move an item onto its next ranked magnet (a better-seeded alternate), wipe
+     * the partial (different infohash), and re-queue it. For the item torrenting
+     * right now, re-queue first then stop the torrent so runOnce doesn't clobber
+     * the COMING_SOON re-queue with a PAUSED (see the STOP handler in runOnce).
+     */
+    suspend fun swapToNextMagnet(id: String) {
+        val feedItem = syncManager.feedItems.value.firstOrNull { it.id == id } ?: return
+        val magnets = feedItem.magnets()
+        if (magnets.size <= 1) return // no alternate to swap to
+        val rec = store.all()[id] ?: return
+        val next = (rec.linkIndex + 1) % magnets.size
+        Log.i(TAG, "swap: $id link[${rec.linkIndex}] -> link[$next]/${magnets.size} (stalled)")
+        if (_activeDownload.value?.id == id) {
+            // Re-queue BEFORE stopping so runOnce's STOP handler leaves it be.
+            store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON, progress = 0f, linkIndex = next)))
+            engine.requestStop()
+        } else {
+            driveManager.mediaDir()?.let { File(it, ".dl_$id").deleteRecursively() }
+            store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON, progress = 0f, linkIndex = next)))
+            runCatching { DownloadService.start(context) }
+        }
+    }
+
+    /**
+     * The poller (run ~every 60s while the app is alive). If the active download
+     * is crawling with no real progress across two polls, swap it to the next
+     * magnet. If nothing's downloading but items are still lacking, kick the
+     * drain service. This is what unwedges a dead/slow torrent hogging the queue.
+     */
+    suspend fun pollAndHeal() {
+        val active = _activeDownload.value
+        if (active != null) {
+            val prev = lastPollProgress
+            lastPollProgress = active.progress
+            val crawling = active.speedBps < STALL_BPS &&
+                (prev != null && active.progress - prev < 0.005f)
+            if (crawling) {
+                pollStrikes += 1
+                if (pollStrikes >= STALL_STRIKES) {
+                    pollStrikes = 0
+                    lastPollProgress = null
+                    swapToNextMagnet(active.id)
+                }
+            } else {
+                pollStrikes = 0
+            }
+        } else {
+            lastPollProgress = null
+            pollStrikes = 0
+            val lacking = store.all().values.any {
+                it.status == DownloadStatus.COMING_SOON ||
+                    it.status == DownloadStatus.FAILED ||
+                    it.status == DownloadStatus.DOWNLOADING
+            }
+            if (lacking && StoragePermission.hasAllFilesAccess()) {
+                runCatching { DownloadService.start(context) }
+            }
+        }
     }
 
     private fun etaSeconds(totalBytes: Long?, downloadedBytes: Long, rateBps: Long): Long? {
@@ -241,5 +327,7 @@ class MegaflixDownloadManager @Inject constructor(
     companion object {
         private const val TAG = "MegaflixDownload"
         private const val DEFAULT_COPY_BUFFER = 1 shl 20 // 1 MB
+        private const val STALL_BPS = 30L * 1024 // under 30 KB/s counts as crawling
+        private const val STALL_STRIKES = 2 // consecutive slow polls (~2 min) before a swap
     }
 }

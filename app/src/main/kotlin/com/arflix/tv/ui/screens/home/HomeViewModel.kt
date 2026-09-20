@@ -215,6 +215,7 @@ class HomeViewModel @Inject constructor(
     private val updatePreferences: com.arflix.tv.updater.UpdatePreferences,
     private val updateStatusManager: com.arflix.tv.updater.UpdateStatusManager,
     private val megaflixSyncManager: com.arflix.tv.megaflix.MegaflixSyncManager,
+    private val megaflixDownloadManager: com.arflix.tv.megaflix.MegaflixDownloadManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.NONE) {
@@ -1678,6 +1679,9 @@ class HomeViewModel @Inject constructor(
             loadHomeData()
             while (true) {
                 kotlinx.coroutines.delay(60_000)
+                // Heal stalled downloads: swap a crawling torrent to its next
+                // ranked magnet, or kick the drain if it's idle with work pending.
+                runCatching { megaflixDownloadManager.pollAndHeal() }
                 if (runCatching { megaflixSyncManager.revChanged() }.getOrDefault(false)) {
                     runCatching { megaflixSyncManager.sync() }
                     loadHomeData()
