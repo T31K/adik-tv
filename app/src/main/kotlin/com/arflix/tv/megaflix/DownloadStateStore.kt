@@ -68,6 +68,20 @@ class DownloadStateStore @Inject constructor(
         context.downloadsDataStore.edit { it[verifiedKey] = fingerprints }
     }
 
+    // Fingerprints of files that passed the full torrent hash check (PieceVerifier)
+    // — the "healthy" flag. A file whose size/mtime changes no longer matches.
+    private val healthyKey = stringSetPreferencesKey("healthy_files")
+
+    suspend fun healthyFiles(): Set<String> =
+        context.downloadsDataStore.data.first()[healthyKey] ?: emptySet()
+
+    fun healthyFilesFlow(): Flow<Set<String>> =
+        context.downloadsDataStore.data.map { it[healthyKey] ?: emptySet() }
+
+    suspend fun markHealthy(fingerprint: String) {
+        context.downloadsDataStore.edit { it[healthyKey] = (it[healthyKey] ?: emptySet()) + fingerprint }
+    }
+
     // Which family TV this is (see Constants.MEGAFLIX_DEVICE_IDS); set once
     // per TV from Settings and sent as `d=` on every feed call.
     private val deviceIdKey = stringPreferencesKey("device_id")

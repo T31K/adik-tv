@@ -9298,6 +9298,7 @@ private fun DownloadsSettings(
             DownloadStat("Paused", downloads.paused.size.toString(), if (downloads.paused.isEmpty()) TextSecondary else Color(0xFFF5A623))
             DownloadStat("Failed", downloads.failed.size.toString(), if (downloads.failed.isEmpty()) TextSecondary else Color(0xFFE5484D))
             DownloadStat("On drive", downloads.readyCount.toString(), SuccessGreen)
+            DownloadStat("Verified", "${downloads.healthyCount}/${downloads.readyCount}", if (downloads.healthyCount == downloads.readyCount) SuccessGreen else TextSecondary)
         }
 
         if (!isEmpty) {

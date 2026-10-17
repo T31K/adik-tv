@@ -92,6 +92,21 @@ class MegaflixDownloadManager @Inject constructor(
                     val target = File(mediaDir, feedItem.path)
                     val finalFile = finalizeToFlat(outcome.file, target)
                     tmpDir.deleteRecursively()
+                    // Thorough check of the file where it will actually be played from:
+                    // re-hash every piece against the torrent. Only a full match is
+                    // flagged healthy; a mismatch goes back to FAILED for a fresh retry.
+                    val manifest = outcome.manifest
+                    if (manifest != null) {
+                        val check = PieceVerifier.verify(finalFile, manifest)
+                        if (!check.healthy) {
+                            Log.w(TAG, "hashcheck: ${finalFile.name} FAILED (${check.badPieces}/${check.checkedPieces} bad pieces, sizeOk=${check.sizeMatches})")
+                            finalFile.delete()
+                            store.putAll(listOf(DownloadRecord(id, DownloadStatus.FAILED, null, 0f, feedItem.sizeBytes, linkIndex)))
+                            return true
+                        }
+                        Log.w(TAG, "hashcheck: ${finalFile.name} healthy (${check.checkedPieces} pieces)")
+                        store.markHealthy(VideoIntegrity.fingerprint(finalFile))
+                    }
                     store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes, linkIndex)))
                 }
                 is DownloadOutcome.Interrupted -> when (outcome.mode) {
@@ -126,7 +141,66 @@ class MegaflixDownloadManager @Inject constructor(
         // Then drain the queue.
         runCatching { recoverStrandedDownloads() }
             .onFailure { Log.w(TAG, "recover: pass failed", it) }
-        while (runOnce()) { /* one at a time */ }
+        // Downloads first; when the queue is empty, hash-check one older movie and
+        // loop (a broken one is re-queued, so it downloads before the next check).
+        while (true) {
+            while (runOnce()) { /* one at a time */ }
+            val checked = runCatching { hashCheckNextUnverified() }
+                .onFailure { Log.w(TAG, "hashcheck: pass failed", it) }
+                .getOrDefault(false)
+            if (!checked) break
+        }
+    }
+
+    // Files the library check couldn't match to any of the item's magnets (dead
+    // magnets, pre-seeded drive copies). Skipped until the next app start.
+    private val uncheckable = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /** READY files on the drive that haven't passed the torrent hash check yet. */
+    private suspend fun unverifiedReady(): List<Pair<DownloadRecord, File>> {
+        val healthy = store.healthyFiles()
+        return store.all().values
+            .filter { it.status == DownloadStatus.READY }
+            .mapNotNull { rec -> rec.localFilePath?.let(::File)?.takeIf { it.isFile }?.let { rec to it } }
+            .filter { (_, f) -> VideoIntegrity.fingerprint(f).let { it !in healthy && it !in uncheckable } }
+    }
+
+    /** True when the one-time library hash check still has work to do. */
+    suspend fun hasUnverified(): Boolean =
+        syncManager.feedItems.value.isNotEmpty() && unverifiedReady().isNotEmpty()
+
+    /**
+     * One-time library check for movies downloaded before hashes were kept: fetch
+     * the item's torrent metadata (trying the magnet it was downloaded with first,
+     * matched by exact file size), re-hash the file on the drive, and flag it
+     * healthy — or delete and re-queue it. Checks ONE file per call so downloads
+     * are never starved. Returns false when there's nothing left to check.
+     */
+    private suspend fun hashCheckNextUnverified(): Boolean {
+        val feed = syncManager.feedItems.value
+        if (feed.isEmpty()) return false // can't resolve magnets until the feed has synced
+        val (rec, file) = unverifiedReady().firstOrNull() ?: return false
+        val fp = VideoIntegrity.fingerprint(file)
+        val magnets = feed.firstOrNull { it.id == rec.id }?.magnets().orEmpty()
+        val order = magnets.indices.sortedBy { if (it == rec.linkIndex) -1 else it }
+        val tmp = File(context.cacheDir, "meta_${rec.id}")
+        for (i in order) {
+            val manifest = engine.fetchManifest(magnets[i], METADATA_TIMEOUT_SEC, tmp) ?: continue
+            if (manifest.fileSize != file.length()) continue // a different release of this title
+            val check = PieceVerifier.verify(file, manifest)
+            if (check.healthy) {
+                Log.w(TAG, "hashcheck: ${file.name} healthy (${check.checkedPieces} pieces, link[$i])")
+                store.markHealthy(fp)
+            } else {
+                Log.w(TAG, "hashcheck: ${file.name} BROKEN (${check.badPieces}/${check.checkedPieces} bad pieces), re-queueing ${rec.id}")
+                if (!file.delete()) Log.w(TAG, "hashcheck: could not delete ${file.absolutePath}")
+                store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON, localFilePath = null, progress = 0f, linkIndex = i)))
+            }
+            return true
+        }
+        Log.w(TAG, "hashcheck: ${file.name} — no magnet matched its size, can't verify")
+        uncheckable += fp
+        return true
     }
 
     /**
@@ -335,7 +409,7 @@ class MegaflixDownloadManager @Inject constructor(
                 it.status == DownloadStatus.FAILED ||
                 it.status == DownloadStatus.DOWNLOADING
         }
-        if (lacking && StoragePermission.hasAllFilesAccess()) {
+        if ((lacking || hasUnverified()) && StoragePermission.hasAllFilesAccess()) {
             runCatching { DownloadService.start(context) }
         }
     }
@@ -349,6 +423,7 @@ class MegaflixDownloadManager @Inject constructor(
     companion object {
         private const val TAG = "MegaflixDownload"
         private const val DEFAULT_COPY_BUFFER = 1 shl 20 // 1 MB
+        private const val METADATA_TIMEOUT_SEC = 45
         private const val STALL_BPS = 30L * 1024 // under 30 KB/s counts as crawling
         private const val STALL_STRIKES = 2 // consecutive slow polls (~2 min) before a swap
     }

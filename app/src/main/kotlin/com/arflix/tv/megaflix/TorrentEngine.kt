@@ -5,6 +5,7 @@ import kotlinx.coroutines.selects.select
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.TorrentHandle
+import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AddTorrentAlert
 import org.libtorrent4j.alerts.AlertType
@@ -34,7 +35,8 @@ enum class Interruption { PAUSE, STOP }
 
 /** Result of a [TorrentEngine.download] call. */
 sealed class DownloadOutcome {
-    data class Completed(val file: File) : DownloadOutcome()
+    // manifest is null only if the torrent's metadata had no usable v1 piece hashes.
+    data class Completed(val file: File, val manifest: PieceManifest?) : DownloadOutcome()
     data class Interrupted(val mode: Interruption) : DownloadOutcome()
 }
 
@@ -86,6 +88,9 @@ class TorrentEngine @Inject constructor() {
         saveDir.mkdirs()
         val done = CompletableDeferred<Unit>()
         val interrupt = CompletableDeferred<Interruption>()
+        // Copied out of the native TorrentInfo on the alert thread (the only thread
+        // where touching the handle is safe) for the post-finalize hash check.
+        var manifest: PieceManifest? = null
         currentInterrupt = interrupt
 
         val listener = object : AlertListener {
@@ -101,6 +106,9 @@ class TorrentEngine @Inject constructor() {
                     AlertType.PIECE_FINISHED ->
                         onProgress((alert as PieceFinishedAlert).handle().status().toProgress())
                     AlertType.TORRENT_FINISHED -> {
+                        manifest = runCatching {
+                            (alert as TorrentFinishedAlert).handle().torrentFile()?.toManifest()
+                        }.getOrNull()
                         onProgress(TorrentProgress(1f, 0L, 0L, 0))
                         if (!done.isCompleted) done.complete(Unit)
                     }
@@ -134,7 +142,48 @@ class TorrentEngine @Inject constructor() {
             .filter { it.isFile && DriveManager.isVideoFile(it.name) }
             .maxByOrNull { it.length() }
             ?: throw IllegalStateException("Torrent finished but no video file in $saveDir")
-        return DownloadOutcome.Completed(file)
+        return DownloadOutcome.Completed(file, manifest)
+    }
+
+    /**
+     * Fetches just a magnet's metadata (no payload) and returns the piece layout
+     * of its largest video file, or null on timeout / no usable hashes. Used by
+     * the one-time library check for files downloaded before hashes were kept.
+     *
+     * ONLY call while no [download] is running (the drain is sequential): it's
+     * libtorrent4j's own fetchMagnet, whose add/remove is safe as long as no
+     * listener of ours is touching a handle at the same time.
+     */
+    fun fetchManifest(magnetUri: String, timeoutSec: Int, tmpDir: File): PieceManifest? {
+        ensureStarted()
+        tmpDir.mkdirs()
+        return try {
+            val bytes = session.fetchMagnet(magnetUri, timeoutSec, tmpDir) ?: return null
+            TorrentInfo.bdecode(bytes).toManifest()
+        } catch (t: Throwable) {
+            null
+        } finally {
+            tmpDir.deleteRecursively()
+        }
+    }
+
+    /** Piece hashes + the largest video file's position; null for v2-only torrents. */
+    private fun TorrentInfo.toManifest(): PieceManifest? {
+        val fs = files()
+        val video = (0 until fs.numFiles())
+            .filter { DriveManager.isVideoFile(fs.fileName(it)) }
+            .maxByOrNull { fs.fileSize(it) }
+            ?: return null
+        val hashes = (0 until numPieces()).map { hashForPiece(it).toHex().lowercase() }
+        // A v2-only torrent has no SHA-1 piece hashes (all zero) — can't verify it.
+        if (hashes.all { h -> h.all { it == '0' } }) return null
+        return PieceManifest(
+            pieceLength = pieceLength().toLong(),
+            totalSize = fs.totalSize(),
+            pieceHashes = hashes,
+            fileOffset = fs.fileOffset(video),
+            fileSize = fs.fileSize(video)
+        )
     }
 
     private fun TorrentStatus.toProgress(): TorrentProgress = TorrentProgress(

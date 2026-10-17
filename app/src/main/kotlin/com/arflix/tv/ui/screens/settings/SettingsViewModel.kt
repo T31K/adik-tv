@@ -165,7 +165,8 @@ data class DownloadsUi(
     val queued: List<DownloadItemUi> = emptyList(),
     val paused: List<DownloadItemUi> = emptyList(),
     val failed: List<DownloadItemUi> = emptyList(),
-    val readyCount: Int = 0
+    val readyCount: Int = 0,
+    val healthyCount: Int = 0 // ready files that passed the full torrent hash check
 )
 
 data class SettingsUiState(
@@ -559,8 +560,11 @@ class SettingsViewModel @Inject constructor(
             combine(
                 megaflixStore.recordsFlow(),
                 megaflixSyncManager.feedItems,
-                megaflixDownloadManager.activeDownload
-            ) { records, feed, active ->
+                megaflixDownloadManager.activeDownload,
+                megaflixStore.healthyFilesFlow()
+            ) { records, feed, active, healthy ->
+                // Fingerprints are "path|size|mtime"; match on path (no disk I/O here).
+                val healthyPaths = healthy.map { it.substringBefore('|') }.toSet()
                 val titles = feed.associate { item ->
                     val base = item.title.ifBlank { item.id }
                     val label = if (item.season != null && item.episode != null) {
@@ -587,7 +591,10 @@ class SettingsViewModel @Inject constructor(
                     queued = rows(com.arflix.tv.data.model.DownloadStatus.COMING_SOON),
                     paused = rows(com.arflix.tv.data.model.DownloadStatus.PAUSED),
                     failed = rows(com.arflix.tv.data.model.DownloadStatus.FAILED),
-                    readyCount = records.values.count { it.status == com.arflix.tv.data.model.DownloadStatus.READY }
+                    readyCount = records.values.count { it.status == com.arflix.tv.data.model.DownloadStatus.READY },
+                    healthyCount = records.values.count {
+                        it.status == com.arflix.tv.data.model.DownloadStatus.READY && it.localFilePath in healthyPaths
+                    }
                 )
             }.collect { downloads ->
                 _uiState.value = _uiState.value.copy(downloads = downloads)
