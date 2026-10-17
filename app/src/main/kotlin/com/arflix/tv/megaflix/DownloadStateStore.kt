@@ -3,6 +3,7 @@ package com.arflix.tv.megaflix
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.arflix.tv.util.downloadsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -55,6 +56,17 @@ class DownloadStateStore @Inject constructor(
 
     suspend fun getRev(): String? =
         context.downloadsDataStore.data.first()[revKey]
+
+    // Fingerprints (VideoIntegrity.fingerprint) of READY files already checked for
+    // holes, so each movie is scanned once rather than on every launch.
+    private val verifiedKey = stringSetPreferencesKey("verified_files")
+
+    suspend fun verifiedFiles(): Set<String> =
+        context.downloadsDataStore.data.first()[verifiedKey] ?: emptySet()
+
+    suspend fun setVerifiedFiles(fingerprints: Set<String>) {
+        context.downloadsDataStore.edit { it[verifiedKey] = fingerprints }
+    }
 
     // Which family TV this is (see Constants.MEGAFLIX_DEVICE_IDS); set once
     // per TV from Settings and sent as `d=` on every feed call.

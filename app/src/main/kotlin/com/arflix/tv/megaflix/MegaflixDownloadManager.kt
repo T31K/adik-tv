@@ -121,9 +121,9 @@ class MegaflixDownloadManager @Inject constructor(
 
     /** Sequentially download everything queued, one at a time. */
     suspend fun drain() {
-        // Self-heal first: finish any download that fetched all its bytes but never
-        // got moved out of its .dl_<id> temp folder (e.g. a killed move, or a
-        // renameTo the USB FUSE mount refused). Then drain the queue.
+        // Self-heal first: re-queue any download left in its .dl_<id> temp folder
+        // (killed mid-torrent or mid-move) so the queue re-checks and finishes it.
+        // Then drain the queue.
         runCatching { recoverStrandedDownloads() }
             .onFailure { Log.w(TAG, "recover: pass failed", it) }
         while (runOnce()) { /* one at a time */ }
@@ -167,10 +167,16 @@ class MegaflixDownloadManager @Inject constructor(
     }
 
     /**
-     * Finish or clean up any `.dl_<id>` temp folder left behind. Complete videos
-     * are moved to their flat name and marked READY; orphans (flat file already
-     * present, or item gone from the feed) are removed; genuinely partial ones and
-     * user-paused ones are left untouched for the normal queue to resume.
+     * Clean up any `.dl_<id>` temp folder left behind. Orphans (an intact flat file
+     * already present, or the item gone from the feed) are removed; everything
+     * else goes back to the queue, where libtorrent re-checks the pieces already
+     * on disk and fetches only what's missing — a stranded torrent that really was
+     * complete finishes in seconds and lands via the normal finalize path.
+     *
+     * Completeness is NEVER judged by file length here: libtorrent allocates each
+     * file at full size up front, so a download killed at 60% (the 2026-09-20
+     * SIGSEGVs) already "looks" complete. Finalizing those by size is what
+     * shipped Grand Budapest Hotel / Mad Max with ~40% of their pieces missing.
      */
     suspend fun recoverStrandedDownloads() {
         val mediaDir = driveManager.mediaDir() ?: return
@@ -188,36 +194,66 @@ class MegaflixDownloadManager @Inject constructor(
                 dir.deleteRecursively()
                 continue
             }
-            val li = records[id]?.linkIndex ?: 0
+            val rec = records[id]
+            val li = rec?.linkIndex ?: 0
             val target = File(mediaDir, feedItem.path)
             if (target.exists() && target.length() > 0) {
-                Log.i(TAG, "recover: flat file already present for $id, pruning temp folder")
-                dir.deleteRecursively()
-                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, target.absolutePath, 1f, feedItem.sizeBytes, li)))
+                if (!runCatching { VideoIntegrity.hasHoles(target) }.getOrDefault(true)) {
+                    Log.i(TAG, "recover: intact flat file already present for $id, pruning temp folder")
+                    dir.deleteRecursively()
+                    store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, target.absolutePath, 1f, feedItem.sizeBytes, li)))
+                    continue
+                }
+                // A flat file with holes is a bad earlier finalize; the partial in
+                // .dl_<id> is the better copy, so drop the flat one and resume.
+                Log.w(TAG, "recover: flat file for $id has holes, deleting it and resuming the partial")
+                target.delete()
+            }
+            // Hand it back to the queue (a wrongly-READY or missing record would
+            // otherwise never be picked up again).
+            if (rec == null || rec.status == DownloadStatus.READY) {
+                Log.i(TAG, "recover: re-queueing stranded partial $id")
+                store.putAll(listOf(DownloadRecord(id, DownloadStatus.COMING_SOON, null, 0f, feedItem.sizeBytes, li)))
+            }
+        }
+    }
+
+    /**
+     * Check every READY movie for zero-filled holes (see [VideoIntegrity]) — heals
+     * the files the old length-based recovery finalized half-downloaded. A broken
+     * file is deleted and re-queued for a fresh download; intact ones are
+     * remembered by fingerprint so each file is scanned only once. Returns how
+     * many broken files were found.
+     */
+    suspend fun verifyReadyFiles(): Int {
+        val verified = store.verifiedFiles()
+        val stillVerified = mutableSetOf<String>()
+        var broken = 0
+        for (rec in store.all().values) {
+            if (rec.status != DownloadStatus.READY) continue
+            val file = rec.localFilePath?.let(::File) ?: continue
+            if (!file.isFile) continue
+            val fp = VideoIntegrity.fingerprint(file)
+            if (fp in verified) {
+                stillVerified += fp
                 continue
             }
-            val video = dir.walkTopDown()
-                .filter { it.isFile && DriveManager.isVideoFile(it.name) }
-                .maxByOrNull { it.length() }
-                ?: continue
-            val expected = feedItem.sizeBytes
-            // 0.95, not 0.99: the curated sizeBytes is an estimate and often counts
-            // the whole release (subs/nfo/art), so a complete multi-file torrent's
-            // video file alone lands a couple percent under it. 0.99 wrongly re-
-            // downloaded complete movies (Coco, Blade Runner); 0.95 keeps them.
-            val complete = if (expected != null && expected > 0) {
-                video.length() >= (expected * 0.95).toLong()
-            } else {
-                video.length() > 50L * 1024 * 1024 // no size hint: accept anything non-trivial
+            // Unreadable right now (drive remounting): leave it for the next pass.
+            val holes = runCatching { VideoIntegrity.hasHoles(file) }.getOrNull() ?: continue
+            if (!holes) {
+                stillVerified += fp
+                continue
             }
-            if (!complete) continue // still partial — the queue will resume it
-            runCatching {
-                val finalFile = finalizeToFlat(video, target)
-                dir.deleteRecursively()
-                store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes, li)))
-                Log.i(TAG, "recover: finalized stranded download $id")
-            }.onFailure { Log.w(TAG, "recover: could not finalize $id", it) }
+            Log.w(TAG, "verify: ${file.name} has missing pieces, deleting and re-queueing ${rec.id}")
+            if (!file.delete()) Log.w(TAG, "verify: could not delete ${file.absolutePath}")
+            store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON, localFilePath = null, progress = 0f)))
+            broken++
         }
+        store.setVerifiedFiles(stillVerified)
+        if (broken > 0 && StoragePermission.hasAllFilesAccess()) {
+            runCatching { DownloadService.start(context) }
+        }
+        return broken
     }
 
     // ── Per-item controls (Settings → Downloads) ────────────────────────────

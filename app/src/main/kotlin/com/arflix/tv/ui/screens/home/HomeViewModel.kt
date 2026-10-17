@@ -1677,6 +1677,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { megaflixSyncManager.sync() }
             loadHomeData()
+            // After Home is up: scan new READY movies for missing pieces; broken ones
+            // are deleted + re-queued, so refresh Home to drop them.
+            if (runCatching { megaflixDownloadManager.verifyReadyFiles() }.getOrDefault(0) > 0) {
+                loadHomeData()
+            }
             while (true) {
                 kotlinx.coroutines.delay(60_000)
                 // Heal stalled downloads: swap a crawling torrent to its next
