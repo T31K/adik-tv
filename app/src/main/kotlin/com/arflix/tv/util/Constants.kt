@@ -40,8 +40,9 @@ object Constants {
     // API base URLs.
     const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
     const val TRAKT_API_URL = "https://api.trakt.tv/"
-    // Megaflix content feed (Postgres-backed, served by main-server).
-    const val MEGAFLIX_FEED_BASE_URL = "https://api.kaleidoscopical.com/megaflix/"
+    // ADIK content feed (Postgres-backed, served by main-server under /adik; the
+    // legacy /megaflix mount serves the same data). Paths live in MegaflixFeedApi.
+    const val MEGAFLIX_FEED_BASE_URL = "https://api.kaleidoscopical.com/"
     const val MEGAFLIX_FEED_TOKEN = "mgfx_7b2cedc4b5f053072628a02e152d8a87"
     // This TV's fleet id is TYPED into Settings by the owner (never hardcoded
     // here — the valid list lives only in main-server routes/megaflix.js).
