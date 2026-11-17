@@ -17,7 +17,9 @@ class CatalogRepositoryLegacyCompatibilityTest {
             profileManager = mockk<ProfileManager>(relaxed = true),
             traktApi = mockk<TraktApi>(relaxed = true),
             okHttpClient = mockk<OkHttpClient>(relaxed = true),
-            invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
+            invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true),
+            megaflixFeedApi = mockk(relaxed = true),
+            megaflixStore = mockk(relaxed = true)
         )
         val parse = CatalogRepository::class.java.getDeclaredMethod(
             "parseCatalogsJson", String::class.java
@@ -46,7 +48,9 @@ class CatalogRepositoryLegacyCompatibilityTest {
             profileManager = mockk<ProfileManager>(relaxed = true),
             traktApi = mockk<TraktApi>(relaxed = true),
             okHttpClient = mockk<OkHttpClient>(relaxed = true),
-            invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
+            invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true),
+            megaflixFeedApi = mockk(relaxed = true),
+            megaflixStore = mockk(relaxed = true)
         )
         val legacyJson = """
             [

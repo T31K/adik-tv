@@ -36,10 +36,15 @@ class MegaflixSyncManager @Inject constructor(
         _feedItems.value = feed
 
         val existing = store.all()
+        // Resolve (and fix the extension of) each item's drive file up front —
+        // normalizeName suspends, and the planner's lookup can't.
+        val present = feed.associate { item ->
+            item.id to driveManager.findPlayableFile(item.path)?.let { normalizeName(it) }?.absolutePath
+        }
         val plan = SyncPlanner.plan(
             feed = feed,
             existing = existing,
-            presentFile = { driveManager.findPlayableFile(it.path)?.absolutePath }
+            presentFile = { present[it.id] }
         )
 
         store.putAll(plan.upserts)
@@ -78,6 +83,21 @@ class MegaflixSyncManager @Inject constructor(
             if (page.items.size < pageSize || offset >= page.total) break
         }
         return out
+    }
+
+    /**
+     * Give a drive file the extension its contents call for (an MKV named `.mp4` →
+     * `.mkv`), carrying its hole-scan/hash-check flags across the rename so the
+     * library isn't re-verified from scratch.
+     */
+    private suspend fun normalizeName(file: File): File {
+        val oldFp = VideoIntegrity.fingerprint(file)
+        val renamed = VideoContainer.normalize(file)
+        if (renamed != file) {
+            store.renameFingerprint(oldFp, VideoIntegrity.fingerprint(renamed))
+            android.util.Log.i("MegaflixSync", "renamed ${file.name} -> ${renamed.name} (real container)")
+        }
+        return renamed
     }
 
     /** Deletes an item's flat file, but only inside the drive's Megaflix/ folder (safety guard). */

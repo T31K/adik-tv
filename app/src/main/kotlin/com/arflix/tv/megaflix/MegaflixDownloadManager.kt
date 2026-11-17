@@ -87,9 +87,11 @@ class MegaflixDownloadManager @Inject constructor(
             }
             when (outcome) {
                 is DownloadOutcome.Completed -> {
-                    // Move the torrent's video out to the exact flat feed filename, then drop
-                    // the temp folder. finalizeToFlat throws if it can't land the file (→ FAILED).
-                    val target = File(mediaDir, feedItem.path)
+                    // Move the torrent's video out to the flat feed filename — with the
+                    // extension its contents call for (an MKV release lands as .mkv even
+                    // if the feed path says .mp4) — then drop the temp folder.
+                    // finalizeToFlat throws if it can't land the file (→ FAILED).
+                    val target = flatTargetFor(mediaDir, feedItem.path, outcome.file)
                     val finalFile = finalizeToFlat(outcome.file, target)
                     tmpDir.deleteRecursively()
                     // Thorough check of the file where it will actually be played from:
@@ -211,8 +213,21 @@ class MegaflixDownloadManager @Inject constructor(
      * (an intra-dir rename that always works), fsync, size-check, then swap it in.
      * Throws on genuine failure so the caller marks the item FAILED.
      */
+    private fun flatTargetFor(mediaDir: File, feedPath: String, src: File): File {
+        val ext = VideoContainer.sniffExtension(src) ?: src.extension.lowercase().ifBlank { null }
+        val name = if (ext != null) VideoContainer.withExtension(feedPath, ext) else feedPath
+        return File(mediaDir, name)
+    }
+
     private fun finalizeToFlat(src: File, target: File): File {
         target.parentFile?.mkdirs()
+        // Clear the slot, including an older copy under another extension (foo.mp4 for foo.mkv).
+        target.parentFile?.let { dir ->
+            while (true) {
+                val old = VideoContainer.findIn(dir, target.name) ?: break
+                if (!old.delete()) break
+            }
+        }
         if (target.exists()) target.delete()
         if (src.renameTo(target)) {
             Log.i(TAG, "finalize: renamed ${src.name} -> ${target.name}")
@@ -270,7 +285,7 @@ class MegaflixDownloadManager @Inject constructor(
             }
             val rec = records[id]
             val li = rec?.linkIndex ?: 0
-            val target = File(mediaDir, feedItem.path)
+            val target = VideoContainer.findIn(mediaDir, feedItem.path) ?: File(mediaDir, feedItem.path)
             if (target.exists() && target.length() > 0) {
                 if (!runCatching { VideoIntegrity.hasHoles(target) }.getOrDefault(true)) {
                     Log.i(TAG, "recover: intact flat file already present for $id, pruning temp folder")

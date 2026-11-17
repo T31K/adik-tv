@@ -82,6 +82,16 @@ class DownloadStateStore @Inject constructor(
         context.downloadsDataStore.edit { it[healthyKey] = (it[healthyKey] ?: emptySet()) + fingerprint }
     }
 
+    /** A file was renamed: move its hole-scan and hash-check flags to the new fingerprint. */
+    suspend fun renameFingerprint(old: String, new: String) {
+        context.downloadsDataStore.edit { prefs ->
+            for (key in listOf(verifiedKey, healthyKey)) {
+                val set = prefs[key] ?: continue
+                if (old in set) prefs[key] = set - old + new
+            }
+        }
+    }
+
     // Which family TV this is (see Constants.MEGAFLIX_DEVICE_IDS); set once
     // per TV from Settings and sent as `d=` on every feed call.
     private val deviceIdKey = stringPreferencesKey("device_id")

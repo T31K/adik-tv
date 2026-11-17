@@ -63,13 +63,13 @@ class DriveManager @Inject constructor(
     }
 
     /**
-     * Flat model: the feed `path` IS the filename. Scans every candidate Megaflix/ folder
-     * for it and returns the first match that's a readable video file.
+     * Flat model: the feed `path` IS the filename, matched by basename so the extension
+     * may differ (see [VideoContainer]). Scans every candidate Megaflix/ folder and
+     * returns the first match that's a readable video file.
      */
     fun findPlayableFile(fileName: String): File? {
         candidateMediaDirs().forEach { dir ->
-            val f = File(dir, fileName)
-            if (f.isFile && isVideoFile(f.name)) return f
+            VideoContainer.findIn(dir, fileName)?.let { return it }
         }
         return null
     }

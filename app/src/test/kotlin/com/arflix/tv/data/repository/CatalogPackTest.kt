@@ -24,7 +24,7 @@ class CatalogPackTest {
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
 
-        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus))
+        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus, mockk(relaxed = true), mockk(relaxed = true)))
 
         val duplicateManifestJson = """
             {
@@ -64,7 +64,7 @@ class CatalogPackTest {
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
 
-        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus))
+        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus, mockk(relaxed = true), mockk(relaxed = true)))
 
         val addedCatalogs = mutableListOf<CatalogConfig>()
         coEvery { repository.getCatalogs() } returns emptyList()
@@ -112,7 +112,7 @@ class CatalogPackTest {
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
 
-        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus))
+        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus, mockk(relaxed = true), mockk(relaxed = true)))
 
         coEvery { repository.getCatalogs() } returns emptyList()
         coEvery { repository["saveCatalogs"](any<List<CatalogConfig>>()) } returns Unit
@@ -148,7 +148,7 @@ class CatalogPackTest {
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val invalidationBus = mockk<CloudSyncInvalidationBus>(relaxed = true)
 
-        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus))
+        val repository = spyk(CatalogRepository(context, profileManager, traktApi, okHttpClient, invalidationBus, mockk(relaxed = true), mockk(relaxed = true)))
 
         // 1. Missing ID
         val missingIdJson = """
