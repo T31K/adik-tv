@@ -229,7 +229,7 @@ fun DetailsScreen(
     initialEpisode: Int? = null,
     viewModel: DetailsViewModel = hiltViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
-    onNavigateToPlayer: (MediaType, Int, EpisodeIdentity?, String?, String?, String?, String?, Long?) -> Unit,
+    onPlayLocal: (com.arflix.tv.navigation.LocalPlayRequest) -> Unit,
     onNavigateToDetails: (MediaType, Int) -> Unit,
     onNavigateToCollection: (String) -> Unit = {},
     onNavigateToHome: () -> Unit = {},
@@ -301,16 +301,18 @@ fun DetailsScreen(
         // show/movie-level localUri. `identity` carries the TMDB season/episode coordinates.
         val episodeLocalPath = if (mediaType == MediaType.TV)
             viewModel.megaflixEpisodePath(identity?.tmdbSeason, identity?.tmdbEpisode) else null
-        val localUri = episodeLocalPath ?: uiState.item?.localUri
-        onNavigateToPlayer(
-            mediaType,
-            mediaId,
-            identity,
-            imdbId,
-            localUri,
-            null,
-            null,
-            startPositionMs
+        val localUri = (if (mediaType == MediaType.TV) episodeLocalPath else uiState.item?.localUri)
+            ?: return
+        onPlayLocal(
+            com.arflix.tv.navigation.LocalPlayRequest(
+                uri = localUri,
+                title = uiState.item?.title.orEmpty(),
+                mediaType = mediaType,
+                tmdbId = mediaId,
+                season = if (mediaType == MediaType.TV) identity?.tmdbSeason ?: tmdbSeason else null,
+                episode = if (mediaType == MediaType.TV) identity?.tmdbEpisode ?: tmdbEpisode else null,
+                startPositionMs = startPositionMs?.takeIf { it > 0L }
+            )
         )
     }
 
@@ -444,10 +446,16 @@ fun DetailsScreen(
                     if (localUriDirect != null) {
                         // Megaflix: local file — hand the URI straight to the player,
                         // skipping stream/addon resolution entirely.
-                        onNavigateToPlayer(
-                            mediaType, mediaId, null, state.imdbId,
-                            localUriDirect, null, null,
-                            state.playPositionMs?.takeIf { it > 0 },
+                        onPlayLocal(
+                            com.arflix.tv.navigation.LocalPlayRequest(
+                                uri = localUriDirect,
+                                title = state.item.title,
+                                mediaType = mediaType,
+                                tmdbId = mediaId,
+                                season = null,
+                                episode = null,
+                                startPositionMs = state.playPositionMs?.takeIf { it > 0 }
+                            )
                         )
                     } else {
                     val season = if (mediaType == MediaType.TV) {
@@ -475,27 +483,13 @@ fun DetailsScreen(
                         state.playPositionMs
                     } else null
 
-                    if (!state.autoPlaySingleSource) {
-                        // Autoplay OFF → open the source picker; never auto-play.
-                        showStreamSelector = true
-                        val identity = selectedEp?.identity ?: state.episodes.firstOrNull {
-                            it.seasonNumber == season && it.episodeNumber == episode
-                        }?.identity ?: viewModel.resolveEpisodeIdentity(
-                            displaySeason = season,
-                            displayEpisode = episode,
-                            tmdbSeason = state.playTmdbSeason ?: season,
-                            tmdbEpisode = state.playTmdbEpisode ?: episode,
-                        )
-                        viewModel.loadStreams(state.imdbId, identity)
-                    } else {
-                        // Autoplay ON → go straight to the player; PlayerScreen auto-picks.
-                        requestFastAutoPlay(
-                            state.imdbId, season, episode, startPositionMs,
-                            selectedEp?.tmdbSeasonNumber ?: state.playTmdbSeason ?: season,
-                            selectedEp?.tmdbEpisodeNumber ?: state.playTmdbEpisode ?: episode
-                        )
-                    }
-                    } // end else (non-local)
+                    // Series: play the selected episode's own file off the drive.
+                    requestFastAutoPlay(
+                        state.imdbId, season, episode, startPositionMs,
+                        selectedEp?.tmdbSeasonNumber ?: state.playTmdbSeason ?: season,
+                        selectedEp?.tmdbEpisodeNumber ?: state.playTmdbEpisode ?: episode
+                    )
+                    } // end else (series)
                 }
                 1 -> { // Sources
                     showStreamSelector = true
@@ -542,9 +536,6 @@ fun DetailsScreen(
                 episodeIndex = idx
                 if (currentSelectedEpisodeIdentity.value != ep.identity) {
                     selectedEpisodeIdentity = ep.identity
-                } else if (isMobile || !state.autoPlaySingleSource) {
-                    showStreamSelector = true
-                    viewModel.loadStreams(state.imdbId, ep.identity)
                 } else {
                     requestFastAutoPlay(
                         state.imdbId, ep.seasonNumber, ep.episodeNumber,
@@ -1048,15 +1039,9 @@ fun DetailsScreen(
                             identity?.displayEpisode == uiState.playEpisode
                         ) uiState.playPositionMs else null
                 }
-                viewModel.recordPlayedEpisode(mediaId, identity)
-                onNavigateToPlayer(
-                    mediaType, mediaId,
-                    identity,
-                    uiState.imdbId,
-                    stream.url?.takeIf { it.isNotBlank() },
-                    stream.addonId.takeIf { it.isNotBlank() },
-                    stream.source.takeIf { it.isNotBlank() },
-                    startPositionMs
+                requestFastAutoPlay(
+                    uiState.imdbId, identity?.displaySeason, identity?.displayEpisode, startPositionMs,
+                    identity?.tmdbSeason, identity?.tmdbEpisode
                 )
             },
             onClose = {

@@ -377,6 +377,11 @@ ksp {
         implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-35")
     }
 
+    // libVLC: the only player. Plays any container/codec off the drive with
+    // hardware decoding and automatic software fallback. 3.6.5's arm64 native
+    // libs are 16 KB page-aligned (required: jniLibs.useLegacyPackaging=false).
+    implementation("org.videolan.android:libvlc-all:3.6.5")
+
     // Networking - Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")

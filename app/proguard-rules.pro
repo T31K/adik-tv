@@ -254,3 +254,11 @@
 -keep class org.libtorrent4j.swig.** { *; }
 -keepclassmembers class org.libtorrent4j.swig.** { *; }
 -dontwarn org.libtorrent4j.**
+
+# ============================================
+# ADIK: libVLC (JNI) — libvlcjni.so looks up fields/methods/callbacks by name
+# (Media/MediaPlayer events, track classes, AWindow surfaces), so keep it whole.
+# ============================================
+-keep class org.videolan.libvlc.** { *; }
+-keepclassmembers class org.videolan.libvlc.** { *; }
+-dontwarn org.videolan.libvlc.**

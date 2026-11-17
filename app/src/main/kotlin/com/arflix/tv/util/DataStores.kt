@@ -17,3 +17,5 @@ val Context.traktDataStore: DataStore<Preferences> by preferencesDataStore(name 
 val Context.profilesDataStore: DataStore<Preferences> by preferencesDataStore(name = "profiles_prefs")
 val Context.authDataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_prefs")
 val Context.downloadsDataStore: DataStore<Preferences> by preferencesDataStore(name = "megaflix_downloads_prefs")
+/** Local playback progress (resume points + watched flags), profile-scoped keys. */
+val Context.playbackProgressDataStore: DataStore<Preferences> by preferencesDataStore(name = "playback_progress_prefs")

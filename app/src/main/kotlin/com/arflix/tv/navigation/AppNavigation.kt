@@ -125,6 +125,33 @@ sealed class Screen(val route: String) {
     }
 }
 
+/** Everything the VLC player needs to play one local drive file. */
+data class LocalPlayRequest(
+    val uri: String,
+    val title: String,
+    val mediaType: MediaType,
+    val tmdbId: Int,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val startPositionMs: Long? = null
+)
+
+/** Route for the libVLC player; arguments match [VlcPlayerViewModel]'s ARG_* keys. */
+object VlcPlayerRoute {
+    const val route = "vlc_player?uri={uri}&title={title}&tmdbId={tmdbId}&type={type}&season={season}&episode={episode}&startMs={startMs}"
+
+    fun create(request: LocalPlayRequest): String {
+        fun enc(value: String) = android.net.Uri.encode(value)
+        return "vlc_player?uri=${enc(request.uri)}" +
+            "&title=${enc(request.title)}" +
+            "&tmdbId=${request.tmdbId}" +
+            "&type=${if (request.mediaType == MediaType.TV) "tv" else "movie"}" +
+            "&season=${request.season ?: -1}" +
+            "&episode=${request.episode ?: -1}" +
+            "&startMs=${request.startPositionMs ?: -1L}"
+    }
+}
+
 internal fun NavHostController.navigateToProfileSelection() {
     navigate(Screen.ProfileSelection.route) {
         // The start destination may already have been removed after profile selection.
@@ -479,24 +506,8 @@ fun AppNavigation(
                 initialSeason = initialSeason,
                 initialEpisode = initialEpisode,
                 currentProfile = currentProfile,
-                onNavigateToPlayer = { type, id, identity, imdbId, url, preferredAddonId, preferredSourceName, startPositionMs ->
-                    navController.navigate(
-                        Screen.Player.createRoute(
-                            mediaType = type,
-                            mediaId = id,
-                            seasonNumber = identity?.displaySeason,
-                            episodeNumber = identity?.displayEpisode,
-                            tmdbSeasonNumber = identity?.tmdbSeason,
-                            tmdbEpisodeNumber = identity?.tmdbEpisode,
-                            kitsuId = identity?.kitsuId,
-                            kitsuEpisodeNumber = identity?.kitsuEpisode,
-                            imdbId = imdbId,
-                            streamUrl = url,
-                            preferredAddonId = preferredAddonId,
-                            preferredSourceName = preferredSourceName,
-                            startPositionMs = startPositionMs
-                        )
-                    )
+                onPlayLocal = { request ->
+                    navController.navigate(VlcPlayerRoute.create(request))
                 },
                 onNavigateToDetails = { type, id ->
                     navController.navigate(Screen.Details.createRoute(type, id))
@@ -525,6 +536,26 @@ fun AppNavigation(
                         popUpTo(Screen.Home.route) { inclusive = true }
                     }
                 },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // libVLC player (local drive files)
+        composable(
+            route = VlcPlayerRoute.route,
+            arguments = listOf(
+                navArgument("uri") { type = NavType.StringType; defaultValue = "" },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("tmdbId") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("type") { type = NavType.StringType; defaultValue = "movie" },
+                navArgument("season") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("episode") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("startMs") { type = NavType.LongType; defaultValue = -1L }
+            ),
+            exitTransition = { ExitTransition.None },
+            popExitTransition = { ExitTransition.None }
+        ) {
+            com.arflix.tv.ui.screens.player.VlcPlayerScreen(
                 onBack = { navController.popBackStack() }
             )
         }

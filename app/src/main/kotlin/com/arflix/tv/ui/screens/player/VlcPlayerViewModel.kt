@@ -1,0 +1,390 @@
+package com.arflix.tv.ui.screens.player
+
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.data.repository.PlaybackProgressStore
+import com.arflix.tv.megaflix.MegaflixLibraryBuilder
+import com.arflix.tv.player.PlaybackState
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
+import java.io.File
+import javax.inject.Inject
+
+data class VlcTrack(val id: Int, val name: String)
+
+data class VlcPlayerUiState(
+    val title: String = "",
+    val subtitle: String? = null,
+    val isLoading: Boolean = true,
+    val isPlaying: Boolean = false,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val audioTracks: List<VlcTrack> = emptyList(),
+    val subtitleTracks: List<VlcTrack> = emptyList(),
+    val selectedAudioId: Int = -1,
+    val selectedSubtitleId: Int = -1,
+    val hasNextEpisode: Boolean = false,
+    val error: String? = null,
+    val finished: Boolean = false
+)
+
+/**
+ * libVLC-backed player for local drive files.
+ *
+ * Hardware decoding is on with automatic software fallback (libVLC tries MediaCodec
+ * first and drops to avcodec when it can't open a stream). If playback still fails,
+ * the file is retried once with hardware decoding off before an error is shown.
+ */
+@HiltViewModel
+class VlcPlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    savedStateHandle: SavedStateHandle,
+    private val progressStore: PlaybackProgressStore,
+    private val libraryBuilder: MegaflixLibraryBuilder,
+    private val playbackState: PlaybackState
+) : ViewModel() {
+
+    private val showTitle: String = savedStateHandle.get<String>(ARG_TITLE).orEmpty()
+    private val tmdbId: Int = savedStateHandle.get<Int>(ARG_TMDB_ID) ?: 0
+    private val mediaType: MediaType =
+        if (savedStateHandle.get<String>(ARG_TYPE) == "tv") MediaType.TV else MediaType.MOVIE
+    private var season: Int? = savedStateHandle.get<Int>(ARG_SEASON)?.takeIf { it >= 0 }
+    private var episode: Int? = savedStateHandle.get<Int>(ARG_EPISODE)?.takeIf { it >= 0 }
+    private var uri: String = savedStateHandle.get<String>(ARG_URI).orEmpty()
+    private var startPositionMs: Long = savedStateHandle.get<Long>(ARG_START_MS)?.takeIf { it > 0L } ?: -1L
+
+    private val _uiState = MutableStateFlow(VlcPlayerUiState(title = showTitle, subtitle = episodeLabel()))
+    val uiState: StateFlow<VlcPlayerUiState> = _uiState.asStateFlow()
+
+    private val libVlc: LibVLC = LibVLC(context, VLC_OPTIONS)
+    private val player: MediaPlayer = MediaPlayer(libVlc)
+    private var attachedLayout: VLCVideoLayout? = null
+    private var started = false
+    private var softwareRetryDone = false
+    private var subtitleDefaultApplied = false
+    private var userPickedSubtitle = false
+    private var progressJob: Job? = null
+    private var released = false
+
+    init {
+        playbackState.setPlaying(true)
+        player.setEventListener { event -> onPlayerEvent(event) }
+    }
+
+    fun attach(layout: VLCVideoLayout) {
+        if (released || attachedLayout === layout) return
+        if (attachedLayout != null) player.detachViews()
+        player.attachViews(layout, null, true, false)
+        attachedLayout = layout
+        if (!started) {
+            started = true
+            viewModelScope.launch { startPlayback(resolveStartPosition(), hardware = true) }
+        }
+    }
+
+    fun detach() {
+        if (released) return
+        if (attachedLayout != null) {
+            player.detachViews()
+            attachedLayout = null
+        }
+    }
+
+    private suspend fun resolveStartPosition(): Long {
+        if (startPositionMs > 0L) return startPositionMs
+        val saved = runCatching { progressStore.get(tmdbId, mediaType, season, episode) }.getOrNull()
+        return if (saved != null && saved.isResumable) saved.positionMs else 0L
+    }
+
+    private fun startPlayback(fromMs: Long, hardware: Boolean) {
+        if (released) return
+        val mediaUri = toVlcUri(uri)
+        if (mediaUri == null) {
+            _uiState.update { it.copy(isLoading = false, error = "This file is not on the drive.") }
+            return
+        }
+        subtitleDefaultApplied = false
+        _uiState.update { it.copy(isLoading = true, error = null, finished = false) }
+        val media = Media(libVlc, mediaUri)
+        media.setHWDecoderEnabled(hardware, false)
+        if (fromMs > 0L) media.addOption(":start-time=${fromMs / 1000.0}")
+        player.setMedia(media)
+        media.release()
+        player.play()
+        startProgressLoop()
+    }
+
+    private fun onPlayerEvent(event: MediaPlayer.Event) {
+        if (released) return
+        when (event.type) {
+            MediaPlayer.Event.Opening -> _uiState.update { it.copy(isLoading = true) }
+            MediaPlayer.Event.Buffering ->
+                _uiState.update { it.copy(isLoading = event.buffering < 100f && !it.isPlaying) }
+            MediaPlayer.Event.Playing -> {
+                _uiState.update { it.copy(isLoading = false, isPlaying = true, error = null) }
+                refreshTracks()
+            }
+            MediaPlayer.Event.Paused -> {
+                _uiState.update { it.copy(isPlaying = false) }
+                saveProgressAsync()
+            }
+            MediaPlayer.Event.Stopped -> _uiState.update { it.copy(isPlaying = false) }
+            MediaPlayer.Event.TimeChanged -> _uiState.update { it.copy(positionMs = event.timeChanged) }
+            MediaPlayer.Event.LengthChanged -> _uiState.update { it.copy(durationMs = event.lengthChanged) }
+            MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESDeleted, MediaPlayer.Event.ESSelected -> refreshTracks()
+            MediaPlayer.Event.EndReached -> onEndReached()
+            MediaPlayer.Event.EncounteredError -> onPlaybackError()
+        }
+    }
+
+    private fun onEndReached() {
+        val duration = _uiState.value.durationMs
+        if (duration > 0L) saveProgressAsync(positionOverride = duration)
+        val next = nextEpisode()
+        if (next != null) {
+            playEpisode(next.first, next.second, next.third)
+        } else {
+            _uiState.update { it.copy(isPlaying = false, finished = true) }
+        }
+    }
+
+    private fun onPlaybackError() {
+        Log.w(TAG, "VLC EncounteredError (hardware retry done=$softwareRetryDone) uri=$uri")
+        if (!softwareRetryDone) {
+            softwareRetryDone = true
+            val resumeAt = _uiState.value.positionMs.takeIf { it > 0L } ?: startPositionMs.coerceAtLeast(0L)
+            startPlayback(resumeAt, hardware = false)
+            return
+        }
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isPlaying = false,
+                error = "This video couldn't be played. The file may be damaged or still downloading."
+            )
+        }
+    }
+
+    private fun refreshTracks() {
+        val audio = player.audioTracks.orEmpty()
+            .filter { it.id >= 0 }
+            .map { VlcTrack(it.id, it.name ?: "Track ${it.id}") }
+        val subs = player.spuTracks.orEmpty()
+            .filter { it.id >= 0 }
+            .map { VlcTrack(it.id, it.name ?: "Subtitle ${it.id}") }
+        // Subtitles start off unless the viewer turns them on.
+        if (!subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
+            subtitleDefaultApplied = true
+            if (player.spuTrack >= 0) player.setSpuTrack(-1)
+        }
+        _uiState.update {
+            it.copy(
+                audioTracks = audio,
+                subtitleTracks = subs,
+                selectedAudioId = player.audioTrack,
+                selectedSubtitleId = player.spuTrack,
+                hasNextEpisode = nextEpisode() != null
+            )
+        }
+    }
+
+    fun togglePlayPause() {
+        if (released || _uiState.value.error != null) return
+        if (_uiState.value.finished) {
+            restartFromBeginning()
+            return
+        }
+        if (player.isPlaying) player.pause() else player.play()
+    }
+
+    /** App went to the background (Home button, screensaver): pause and free the drive. */
+    fun onBackground() {
+        if (released) return
+        pause()
+        saveProgressAsync()
+        playbackState.setPlaying(false)
+    }
+
+    fun onForeground() {
+        if (released) return
+        playbackState.setPlaying(true)
+    }
+
+    fun play() {
+        if (!released && !player.isPlaying && _uiState.value.error == null) player.play()
+    }
+
+    fun pause() {
+        if (!released && player.isPlaying) player.pause()
+    }
+
+    /** Seeks to an absolute position (clamped). */
+    fun seekTo(targetMs: Long) {
+        if (released) return
+        val duration = _uiState.value.durationMs
+        val clamped = if (duration > 0L) targetMs.coerceIn(0L, (duration - 1_000L).coerceAtLeast(0L)) else targetMs.coerceAtLeast(0L)
+        player.setTime(clamped, false)
+        _uiState.update { it.copy(positionMs = clamped) }
+    }
+
+    fun selectAudioTrack(id: Int) {
+        if (released) return
+        player.setAudioTrack(id)
+        _uiState.update { it.copy(selectedAudioId = player.audioTrack) }
+    }
+
+    fun selectSubtitleTrack(id: Int) {
+        if (released) return
+        userPickedSubtitle = true
+        player.setSpuTrack(id)
+        _uiState.update { it.copy(selectedSubtitleId = player.spuTrack) }
+    }
+
+    fun playNextEpisode() {
+        val next = nextEpisode() ?: return
+        saveProgressAsync()
+        playEpisode(next.first, next.second, next.third)
+    }
+
+    private fun restartFromBeginning() {
+        startPositionMs = -1L
+        softwareRetryDone = false
+        startPlayback(0L, hardware = true)
+    }
+
+    private fun playEpisode(nextSeason: Int, nextEpisode: Int, nextUri: String) {
+        season = nextSeason
+        episode = nextEpisode
+        uri = nextUri
+        startPositionMs = -1L
+        softwareRetryDone = false
+        _uiState.value = VlcPlayerUiState(title = showTitle, subtitle = episodeLabel())
+        viewModelScope.launch { startPlayback(resolveStartPosition(), hardware = true) }
+    }
+
+    /** Next downloaded episode of the same show: e+1, else the next season's first. */
+    private fun nextEpisode(): Triple<Int, Int, String>? {
+        if (mediaType != MediaType.TV) return null
+        val s = season ?: return null
+        val e = episode ?: return null
+        libraryBuilder.cachedEpisodePath(tmdbId, s, e + 1)?.let { return Triple(s, e + 1, it) }
+        libraryBuilder.cachedEpisodePath(tmdbId, s + 1, 1)?.let { return Triple(s + 1, 1, it) }
+        return null
+    }
+
+    private fun episodeLabel(): String? =
+        if (mediaType == MediaType.TV && season != null && episode != null) "Season $season · Episode $episode" else null
+
+    private fun startProgressLoop() {
+        if (progressJob?.isActive == true) return
+        progressJob = viewModelScope.launch {
+            while (isActive) {
+                delay(PROGRESS_SAVE_INTERVAL_MS)
+                if (!released && player.isPlaying) saveProgress()
+            }
+        }
+    }
+
+    private fun saveProgressAsync(positionOverride: Long? = null) {
+        val snapshot = progressSnapshot(positionOverride) ?: return
+        appScope.launch { persist(snapshot) }
+    }
+
+    private suspend fun saveProgress() {
+        val snapshot = progressSnapshot(null) ?: return
+        withContext(Dispatchers.IO) { persist(snapshot) }
+    }
+
+    private data class Snapshot(val season: Int?, val episode: Int?, val positionMs: Long, val durationMs: Long)
+
+    private fun progressSnapshot(positionOverride: Long?): Snapshot? {
+        if (tmdbId <= 0) return null
+        val state = _uiState.value
+        val duration = state.durationMs.takeIf { it > 0L } ?: return null
+        val position = positionOverride ?: (if (!released) player.time else state.positionMs).takeIf { it >= 0L } ?: state.positionMs
+        if (position <= 0L) return null
+        return Snapshot(season, episode, position, duration)
+    }
+
+    private suspend fun persist(s: Snapshot) {
+        runCatching {
+            progressStore.save(tmdbId, mediaType, s.season, s.episode, s.positionMs, s.durationMs, showTitle)
+        }.onFailure { Log.w(TAG, "saving progress failed", it) }
+    }
+
+    override fun onCleared() {
+        val finalSnapshot = progressSnapshot(null)
+        released = true
+        progressJob?.cancel()
+        runCatching {
+            player.setEventListener(null)
+            player.stop()
+            if (attachedLayout != null) player.detachViews()
+            player.release()
+            libVlc.release()
+        }.onFailure { Log.w(TAG, "releasing VLC failed", it) }
+        attachedLayout = null
+        playbackState.setPlaying(false)
+        if (finalSnapshot != null) {
+            appScope.launch { withContext(NonCancellable) { persist(finalSnapshot) } }
+        }
+        super.onCleared()
+    }
+
+    private fun toVlcUri(raw: String): Uri? {
+        if (raw.isBlank()) return null
+        val path = when {
+            raw.startsWith("file://") -> Uri.parse(raw).path ?: raw.removePrefix("file://")
+            raw.startsWith("/") -> raw
+            else -> return Uri.parse(raw)
+        }
+        val file = File(path)
+        return if (file.exists()) Uri.fromFile(file) else null
+    }
+
+    companion object {
+        private const val TAG = "VlcPlayer"
+        private const val PROGRESS_SAVE_INTERVAL_MS = 3_000L
+
+        const val ARG_URI = "uri"
+        const val ARG_TITLE = "title"
+        const val ARG_TMDB_ID = "tmdbId"
+        const val ARG_TYPE = "type"
+        const val ARG_SEASON = "season"
+        const val ARG_EPISODE = "episode"
+        const val ARG_START_MS = "startMs"
+
+        /** Survives the ViewModel so the final progress write isn't cancelled on exit. */
+        private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        private val VLC_OPTIONS = arrayListOf(
+            "--audio-time-stretch",
+            "--audio-language=eng,en",
+            "--sub-language=none",
+            "--no-sub-autodetect-file",
+            "--file-caching=1500"
+        )
+    }
+}
