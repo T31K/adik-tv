@@ -123,7 +123,8 @@ interface TmdbApi {
         @Path("media_type") mediaType: String,
         @Path("id") id: Int,
         @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
+        @Query("language") language: String? = null,
+        @Query("page") page: Int = 1
     ): TmdbListResponse
 
     @GET("{media_type}/{id}/recommendations")
@@ -131,7 +132,8 @@ interface TmdbApi {
         @Path("media_type") mediaType: String,
         @Path("id") id: Int,
         @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
+        @Query("language") language: String? = null,
+        @Query("page") page: Int = 1
     ): TmdbListResponse
 
     @GET("{media_type}/{id}/images")

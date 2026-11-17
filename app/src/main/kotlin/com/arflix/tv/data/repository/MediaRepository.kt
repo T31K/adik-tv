@@ -334,28 +334,55 @@ class MediaRepository @Inject constructor(
         return result
     }
 
-    /** TMDB recommendations, falling back to "similar" when there are none. */
+    /**
+     * "More Like This", drawn only from this TV's library: first the library titles
+     * TMDB recommends for this one (in TMDB's order), then library titles sharing the
+     * most genres. Downloaded titles come before ones still coming.
+     */
     suspend fun getSimilar(mediaType: MediaType, mediaId: Int): List<MediaItem> {
         val cacheKey = "${mediaType}_similar_$mediaId"
         getFromCache(similarCache, cacheKey)?.let { return it }
 
+        val library = megaflixLibrary.libraryItems(mediaType).filter { it.id != mediaId }
+        if (library.isEmpty()) return emptyList()
+
         val type = if (mediaType == MediaType.TV) "tv" else "movie"
-        val recommendations = try {
-            tmdbApi.getRecommendations(type, mediaId, apiKey, language = contentLanguage)
+        suspend fun tmdbIds(fetch: suspend () -> List<Int>): List<Int> = try {
+            fetch()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            null
+            emptyList()
         }
-        val source = recommendations?.results?.takeIf { it.isNotEmpty() }
-            ?: tmdbApi.getSimilar(type, mediaId, apiKey, language = contentLanguage).results
-        val result = source
-            .map { it.toMediaItem(mediaType) }
-            .distinctBy { it.id }
+        // Up to 2 pages of each: more TMDB picks means more overlap with a small library.
+        val recommended = (1..2).flatMap { page ->
+            tmdbIds { tmdbApi.getRecommendations(type, mediaId, apiKey, language = contentLanguage, page = page).results.map { it.id } }
+        } + (1..2).flatMap { page ->
+            tmdbIds { tmdbApi.getSimilar(type, mediaId, apiKey, language = contentLanguage, page = page).results.map { it.id } }
+        }
+        val rank = recommended.distinct().withIndex().associate { (i, id) -> id to i }
+
+        val genres = (library.firstOrNull { it.id == mediaId }?.genreIds
+            ?: runCatching { getMovieGenres(type, mediaId) }.getOrDefault(emptyList())).toSet()
+
+        val ready = { item: MediaItem -> item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.READY }
+        val result = library
+            .map { item -> item to (rank[item.id] to item.genreIds.count { it in genres }) }
+            .filter { (_, s) -> s.first != null || s.second > 0 }
+            .sortedWith(
+                compareBy<Pair<MediaItem, Pair<Int?, Int>>> { (_, s) -> if (s.first != null) 0 else 1 }
+                    .thenBy { (_, s) -> s.first ?: Int.MAX_VALUE }
+                    .thenByDescending { (_, s) -> s.second }
+                    .thenBy { (item, _) -> if (ready(item)) 0 else 1 }
+            )
+            .map { it.first }
+            .sortedBy { if (ready(it)) 0 else 1 } // stable: keeps relevance order within each group
             .take(12)
         similarCache[cacheKey] = CacheEntry(result, System.currentTimeMillis())
-        cacheItems(result)
         return result
     }
+
+    private suspend fun getMovieGenres(type: String, mediaId: Int): List<Int> =
+        if (type == "movie") tmdbApi.getMovieDetails(mediaId, apiKey).genres.map { it.id } else emptyList()
 
     suspend fun getLogoUrl(mediaType: MediaType, mediaId: Int): String? {
         val cacheKey = "${mediaType}_logo_$mediaId"

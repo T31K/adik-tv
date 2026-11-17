@@ -114,11 +114,11 @@ class MegaflixDownloadManager @Inject constructor(
         val internal = isInternal(tmpDir)
         if (!internal && playbackState.isPlaying.value) {
             // A drive download would compete with the movie on screen: hold it.
-            Log.i(TAG, "queue: $id needs the drive; waiting for playback to end")
+            Log.w(TAG, "queue: $id needs the drive; waiting for playback to end")
             playbackState.awaitIdle()
         }
         tmpDir.mkdirs()
-        Log.i(TAG, "queue: $id -> ${if (internal) "internal" else "drive"} temp ${tmpDir.absolutePath}")
+        Log.w(TAG, "queue: $id -> ${if (internal) "internal" else "drive"} temp ${tmpDir.absolutePath}")
 
         store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes, linkIndex)))
         _activeDownload.value = ActiveDownload(id, 0f, 0L, 0L, null, 0)
@@ -264,7 +264,7 @@ class MegaflixDownloadManager @Inject constructor(
             val feedItem = syncManager.feedItems.value.firstOrNull { it.id == id }
             if (feedItem == null) {
                 if (syncManager.feedItems.value.isEmpty()) return // feed not loaded yet; recovery retries
-                Log.i(TAG, "move: $id no longer in feed, dropping staged file")
+                Log.w(TAG, "move: $id no longer in feed, dropping staged file")
                 internalTempDir(id).deleteRecursively()
                 return
             }
@@ -280,7 +280,7 @@ class MegaflixDownloadManager @Inject constructor(
             val finalFile = try {
                 finalizeToFlat(staged, target) { playbackState.isPlaying.value }
             } catch (e: MoveAbortedException) {
-                Log.i(TAG, "move: ${target.name} paused for playback; will restart")
+                Log.w(TAG, "move: ${target.name} paused for playback; will restart")
                 continue
             }
             internalTempDir(id).deleteRecursively()
@@ -288,13 +288,14 @@ class MegaflixDownloadManager @Inject constructor(
             store.putAll(listOf(
                 DownloadRecord(id, DownloadStatus.READY, finalFile.absolutePath, 1f, feedItem.sizeBytes, rec.linkIndex)
             ))
-            Log.i(TAG, "move: ${finalFile.name} on the drive")
+            Log.w(TAG, "move: ${finalFile.name} on the drive")
             return
         }
     }
 
     /** Sequentially download everything queued, one at a time. */
     suspend fun drain() {
+        Log.w(TAG, "drain: start (feed=${syncManager.feedItems.value.size} items, playing=${playbackState.isPlaying.value})")
         // Self-heal first: re-queue any download left in a temp folder (killed
         // mid-torrent) and resume pending drive moves. Then drain the queue.
         runCatching { recoverStrandedDownloads() }
@@ -352,7 +353,7 @@ class MegaflixDownloadManager @Inject constructor(
             playbackState.awaitIdle()
             val check = PieceVerifier.verify(file, manifest) { playbackState.isPlaying.value }
             if (check.aborted) {
-                Log.i(TAG, "hashcheck: ${file.name} paused for playback; will retry")
+                Log.w(TAG, "hashcheck: ${file.name} paused for playback; will retry")
                 return true
             }
             if (check.healthy) {
@@ -396,10 +397,10 @@ class MegaflixDownloadManager @Inject constructor(
         }
         if (target.exists()) target.delete()
         if (src.renameTo(target)) {
-            Log.i(TAG, "finalize: renamed ${src.name} -> ${target.name}")
+            Log.w(TAG, "finalize: renamed ${src.name} -> ${target.name}")
             return target
         }
-        Log.i(TAG, "finalize: renameTo not possible for ${target.name}; copying")
+        Log.w(TAG, "finalize: renameTo not possible for ${target.name}; copying")
         val part = File(target.parentFile, target.name + ".part")
         if (part.exists()) part.delete()
         try {
@@ -428,7 +429,7 @@ class MegaflixDownloadManager @Inject constructor(
             throw IOException("finalize: could not swap .part into place for ${target.name}")
         }
         src.delete()
-        Log.i(TAG, "finalize: copied ${target.name} (${target.length()} bytes)")
+        Log.w(TAG, "finalize: copied ${target.name} (${target.length()} bytes)")
         return target
     }
 
@@ -467,12 +468,12 @@ class MegaflixDownloadManager @Inject constructor(
             val rec = records[id]
             val feedItem = feed.firstOrNull { it.id == id }
             if (feedItem == null) {
-                Log.i(TAG, "recover: $id no longer in feed, pruning temp folder")
+                Log.w(TAG, "recover: $id no longer in feed, pruning temp folder")
                 dir.deleteRecursively()
                 continue
             }
             if (isInternal(dir) && rec?.stagedPath != null) {
-                Log.i(TAG, "recover: resuming pending drive move for $id")
+                Log.w(TAG, "recover: resuming pending drive move for $id")
                 scheduleMove(id)
                 continue
             }
@@ -481,7 +482,7 @@ class MegaflixDownloadManager @Inject constructor(
             val target = VideoContainer.findIn(mediaDir, feedItem.path) ?: File(mediaDir, feedItem.path)
             if (target.exists() && target.length() > 0) {
                 if (!runCatching { VideoIntegrity.hasHoles(target) }.getOrDefault(true)) {
-                    Log.i(TAG, "recover: intact flat file already present for $id, pruning temp folder")
+                    Log.w(TAG, "recover: intact flat file already present for $id, pruning temp folder")
                     dir.deleteRecursively()
                     store.putAll(listOf(DownloadRecord(id, DownloadStatus.READY, target.absolutePath, 1f, feedItem.sizeBytes, li)))
                     continue
@@ -494,7 +495,7 @@ class MegaflixDownloadManager @Inject constructor(
             // Hand it back to the queue (a wrongly-READY or missing record would
             // otherwise never be picked up again).
             if (rec == null || rec.status == DownloadStatus.READY) {
-                Log.i(TAG, "recover: re-queueing stranded partial $id")
+                Log.w(TAG, "recover: re-queueing stranded partial $id")
                 store.putAll(listOf(DownloadRecord(id, DownloadStatus.COMING_SOON, null, 0f, feedItem.sizeBytes, li)))
             }
         }
@@ -591,7 +592,7 @@ class MegaflixDownloadManager @Inject constructor(
         val rec = store.all()[id] ?: return
         if (rec.stagedPath != null) return // already downloaded
         val next = (rec.linkIndex + 1) % magnets.size
-        Log.i(TAG, "swap: $id link[${rec.linkIndex}] -> link[$next]/${magnets.size} (stalled)")
+        Log.w(TAG, "swap: $id link[${rec.linkIndex}] -> link[$next]/${magnets.size} (stalled)")
         if (_activeDownload.value?.id == id) {
             // Re-queue BEFORE stopping so runOnce's STOP handler leaves it be.
             store.putAll(listOf(rec.copy(status = DownloadStatus.COMING_SOON, progress = 0f, linkIndex = next)))

@@ -11,16 +11,16 @@ import kotlinx.coroutines.flow.map
 
 /** Player (libVLC) preferences set in Settings → Subtitles / Language. Device-wide. */
 data class PlayerPrefsValues(
-    /** Subtitle text size in percent of VLC's default (50..200). */
-    val subtitleScalePercent: Int = 100,
+    /** Subtitle text size in percent of VLC's default (50..200). 115 ≈ Netflix's size on a TV. */
+    val subtitleScalePercent: Int = 115,
     /** Subtitle text colour, 0xRRGGBB. */
     val subtitleColor: Int = 0xFFFFFF,
     /** Draw a dark box behind subtitle text. */
     val subtitleBackground: Boolean = false,
     /** Preferred audio language (ISO 639-2, e.g. "eng"). */
     val audioLanguage: String = "eng",
-    /** Subtitle language to turn on automatically; blank = subtitles off by default. */
-    val subtitleLanguage: String = ""
+    /** Subtitle language to turn on automatically (default English); blank = subtitles off. */
+    val subtitleLanguage: String = "eng"
 )
 
 object PlayerPrefs {
@@ -33,11 +33,12 @@ object PlayerPrefs {
     fun observe(context: Context): Flow<PlayerPrefsValues> =
         context.settingsDataStore.data.map { p ->
             PlayerPrefsValues(
-                subtitleScalePercent = (p[SUB_SCALE] ?: 100).coerceIn(50, 200),
+                subtitleScalePercent = (p[SUB_SCALE] ?: 115).coerceIn(50, 200),
                 subtitleColor = p[SUB_COLOR] ?: 0xFFFFFF,
                 subtitleBackground = p[SUB_BG] ?: false,
                 audioLanguage = p[AUDIO_LANG]?.takeIf { it.isNotBlank() } ?: "eng",
-                subtitleLanguage = p[SUB_LANG].orEmpty()
+                // Unset → English on. Turning subtitles off in Settings stores "" explicitly.
+                subtitleLanguage = p[SUB_LANG] ?: "eng"
             )
         }
 

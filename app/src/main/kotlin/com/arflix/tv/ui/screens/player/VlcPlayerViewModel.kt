@@ -200,10 +200,16 @@ class VlcPlayerViewModel @Inject constructor(
         val subs = player.spuTracks.orEmpty()
             .filter { it.id >= 0 }
             .map { VlcTrack(it.id, it.name ?: "Subtitle ${it.id}") }
-        // Subtitles start off unless the viewer turns them on (or picked a default language).
-        if (!autoSubtitles && !subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
+        if (!subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
             subtitleDefaultApplied = true
-            if (player.spuTrack >= 0) player.setSpuTrack(-1)
+            if (!autoSubtitles) {
+                // Subtitles turned off in Settings.
+                if (player.spuTrack >= 0) player.setSpuTrack(-1)
+            } else {
+                // VLC grabs the first track in the language, which is often a
+                // "Forced" track (foreign-language lines only). Prefer the full one.
+                bestSubtitleTrack(subs)?.let { if (it != player.spuTrack) player.setSpuTrack(it) }
+            }
         }
         _uiState.update {
             it.copy(
@@ -214,6 +220,26 @@ class VlcPlayerViewModel @Inject constructor(
                 hasNextEpisode = nextEpisode() != null
             )
         }
+    }
+
+    /**
+     * The subtitle track to show by default: one in the preferred language,
+     * full dialogue first (not Forced), plain before SDH/CC. Null if none match.
+     */
+    private fun bestSubtitleTrack(subs: List<VlcTrack>): Int? {
+        val langs = languageList(prefs.subtitleLanguage).split(",") +
+            (languageNames[prefs.subtitleLanguage.lowercase()] ?: emptyList())
+        // Whole words only: "en" must not match "French".
+        fun matches(name: String): Boolean {
+            val words = name.lowercase().split(Regex("[^\\p{L}]+")).toSet()
+            return langs.any { it.isNotBlank() && it in words }
+        }
+        val inLang = subs.filter { matches(it.name) }
+        if (inLang.isEmpty()) return null
+        return inLang.minByOrNull { t ->
+            val n = t.name.lowercase()
+            (if ("forced" in n) 10 else 0) + (if ("sdh" in n || "cc" in n.split(Regex("\\W+")) || "hearing" in n) 1 else 0)
+        }?.id
     }
 
     fun togglePlayPause() {
@@ -392,10 +418,28 @@ class VlcPlayerViewModel @Inject constructor(
             "--sub-language=${if (p.subtitleLanguage.isBlank()) "none" else languageList(p.subtitleLanguage)}",
             "--no-sub-autodetect-file",
             "--sub-text-scale=${p.subtitleScalePercent}",
+            // Netflix-style text: bold white with a soft dark outline and drop
+            // shadow, no box, lifted a little off the bottom edge. (Styled ASS/SSA
+            // tracks keep their own styling.)
+            "--freetype-bold",
             "--freetype-color=${p.subtitleColor and 0xFFFFFF}",
+            "--freetype-outline-thickness=2",
+            "--freetype-outline-color=0",
+            "--freetype-outline-opacity=200",
+            "--freetype-shadow-color=0",
+            "--freetype-shadow-opacity=170",
+            "--freetype-shadow-distance=0.05",
+            "--sub-margin=48",
             "--freetype-background-color=0",
             "--freetype-background-opacity=${if (p.subtitleBackground) 160 else 0}",
             "--file-caching=1500"
+        )
+
+        /** Words VLC uses in track names, e.g. "Track 3 - [English]". */
+        private val languageNames = mapOf(
+            "eng" to listOf("english"), "fre" to listOf("french", "français"), "spa" to listOf("spanish", "español"),
+            "msa" to listOf("malay"), "may" to listOf("malay"), "chi" to listOf("chinese"), "zho" to listOf("chinese"),
+            "ind" to listOf("indonesian"), "jpn" to listOf("japanese"), "kor" to listOf("korean"), "tam" to listOf("tamil")
         )
 
         /** "eng" → "eng,en" so both 3- and 2-letter track tags match. */

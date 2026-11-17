@@ -98,7 +98,7 @@ class MegaflixSyncManager @Inject constructor(
         val renamed = VideoContainer.normalize(file)
         if (renamed != file) {
             store.renameFingerprint(oldFp, VideoIntegrity.fingerprint(renamed))
-            android.util.Log.i("MegaflixSync", "renamed ${file.name} -> ${renamed.name} (real container)")
+            android.util.Log.w("MegaflixSync", "renamed ${file.name} -> ${renamed.name} (real container)")
         }
         return renamed
     }
