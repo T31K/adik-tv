@@ -21,10 +21,12 @@ data class PieceManifest(
 data class PieceCheck(
     val checkedPieces: Int,
     val badPieces: Int,
-    val sizeMatches: Boolean
+    val sizeMatches: Boolean,
+    /** The check was cut short (playback started); says nothing about the file. */
+    val aborted: Boolean = false
 ) {
     /** Every piece we could check matched, and there was at least one. */
-    val healthy: Boolean get() = sizeMatches && checkedPieces > 0 && badPieces == 0
+    val healthy: Boolean get() = !aborted && sizeMatches && checkedPieces > 0 && badPieces == 0
 }
 
 /**
@@ -38,7 +40,11 @@ data class PieceCheck(
  * are deleted, so they're skipped; everything else is verified.
  */
 object PieceVerifier {
-    fun verify(file: File, manifest: PieceManifest): PieceCheck {
+    /**
+     * [shouldAbort] is polled between pieces; returning true stops the read early
+     * (result has `aborted = true`) so a drive check never competes with playback.
+     */
+    fun verify(file: File, manifest: PieceManifest, shouldAbort: () -> Boolean = { false }): PieceCheck {
         if (file.length() != manifest.fileSize) return PieceCheck(0, 0, sizeMatches = false)
         val fileStart = manifest.fileOffset
         val fileEnd = manifest.fileOffset + manifest.fileSize
@@ -50,6 +56,7 @@ object PieceVerifier {
             val first = (fileStart / manifest.pieceLength).toInt()
             val last = ((fileEnd - 1) / manifest.pieceLength).toInt()
             for (i in first..last) {
+                if (shouldAbort()) return PieceCheck(checked, bad, sizeMatches = true, aborted = true)
                 val pieceStart = i * manifest.pieceLength
                 val pieceEnd = minOf(pieceStart + manifest.pieceLength, manifest.totalSize)
                 if (pieceStart < fileStart || pieceEnd > fileEnd) continue // straddles another file

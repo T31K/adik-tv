@@ -33,7 +33,8 @@ class MegaflixLibraryBuilderTest {
         assertThat(items).hasSize(1)
         assertThat(items[0].id).isEqualTo(10378)
         assertThat(items[0].downloadStatus).isEqualTo(DownloadStatus.READY)
-        assertThat(items[0].localUri).isEqualTo("/drive/Megaflix/Movies/BBB/bbb.mkv")
+        // Local files are handed to the player as file:// URIs.
+        assertThat(items[0].localUri).isEqualTo("file:///drive/Megaflix/Movies/BBB/bbb.mkv")
     }
 
     @Test

@@ -18,7 +18,8 @@ class MegaflixSyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val feedApi: MegaflixFeedApi,
     private val store: DownloadStateStore,
-    private val driveManager: DriveManager
+    private val driveManager: DriveManager,
+    private val playbackState: com.arflix.tv.player.PlaybackState = com.arflix.tv.player.PlaybackState()
 ) {
     private val _feedItems = MutableStateFlow<List<FeedItemDto>>(emptyList())
     val feedItems: StateFlow<List<FeedItemDto>> = _feedItems.asStateFlow()
@@ -91,6 +92,8 @@ class MegaflixSyncManager @Inject constructor(
      * library isn't re-verified from scratch.
      */
     private suspend fun normalizeName(file: File): File {
+        // Never rename drive files under a playing movie; the next sync catches up.
+        if (playbackState.isPlaying.value) return file
         val oldFp = VideoIntegrity.fingerprint(file)
         val renamed = VideoContainer.normalize(file)
         if (renamed != file) {

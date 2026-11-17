@@ -22,10 +22,24 @@ class DownloadQueueTest {
         assertThat(DownloadQueue.nextToDownload(recs)).isEqualTo("b")
     }
 
-    @Test fun nullWhenAllReadyOrDownloading() {
-        val recs = mapOf(
-            "a" to rec("a", DownloadStatus.READY),
+    @Test fun skipsStagedDownloadsWaitingForDriveMove() {
+        val recs = linkedMapOf(
+            "a" to rec("a", DownloadStatus.DOWNLOADING).copy(stagedPath = "/data/dl/a/a.mkv", progress = 1f),
+            "b" to rec("b", DownloadStatus.COMING_SOON))
+        assertThat(DownloadQueue.nextToDownload(recs)).isEqualTo("b")
+        assertThat(DownloadQueue.nextToDownload(mapOf("a" to recs.getValue("a")))).isNull()
+    }
+
+    @Test fun resumesInterruptedDownloadFirst() {
+        // A DOWNLOADING record seen by the (sequential) drain is a killed leftover.
+        val recs = linkedMapOf(
+            "a" to rec("a", DownloadStatus.COMING_SOON),
             "b" to rec("b", DownloadStatus.DOWNLOADING))
+        assertThat(DownloadQueue.nextToDownload(recs)).isEqualTo("b")
+    }
+
+    @Test fun nullWhenAllReady() {
+        val recs = mapOf("a" to rec("a", DownloadStatus.READY))
         assertThat(DownloadQueue.nextToDownload(recs)).isNull()
     }
 }

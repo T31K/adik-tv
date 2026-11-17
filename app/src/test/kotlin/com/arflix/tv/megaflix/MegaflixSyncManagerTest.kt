@@ -11,7 +11,10 @@ import org.junit.Test
 
 class MegaflixSyncManagerTest {
     private val api = mockk<MegaflixFeedApi>()
-    private val store = mockk<DownloadStateStore>(relaxed = true)
+    private val store = mockk<DownloadStateStore>(relaxed = true).also {
+        // No fleet device id typed in (a relaxed mock would answer "").
+        coEvery { it.getDeviceId() } returns null
+    }
     private val drive = mockk<DriveManager>(relaxed = true)
 
     private fun feedItem(id: String) = FeedItemDto(id = id, tmdbId = 1, title = id, path = "Megaflix/Movies/$id")

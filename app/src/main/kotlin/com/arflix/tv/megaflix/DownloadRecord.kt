@@ -12,5 +12,11 @@ data class DownloadRecord(
     val sizeBytes: Long? = null,
     // Which of the feed item's ranked magnets (links[]) this download is using.
     // The stall poller advances it to fall back to a better-seeded alternate.
-    val linkIndex: Int = 0
+    val linkIndex: Int = 0,
+    // Pending move: a finished, checked download sitting in internal storage
+    // (filesDir/dl/<id>/…) waiting to be copied to the drive. Set while the move
+    // waits for playback to end; recoverStrandedDownloads finishes it after a restart.
+    val stagedPath: String? = null,
+    // The staged file passed the torrent piece-hash check before the move.
+    val stagedHealthy: Boolean = false
 )
