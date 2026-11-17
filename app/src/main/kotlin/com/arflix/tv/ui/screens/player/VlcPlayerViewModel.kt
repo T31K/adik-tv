@@ -432,7 +432,9 @@ class VlcPlayerViewModel @Inject constructor(
             "--sub-margin=48",
             "--freetype-background-color=0",
             "--freetype-background-opacity=${if (p.subtitleBackground) 160 else 0}",
-            "--file-caching=1500"
+            // 5 s read-ahead from the USB drive: absorbs short stalls when the
+            // disk head is also serving a torrent write.
+            "--file-caching=5000"
         )
 
         /** Words VLC uses in track names, e.g. "Track 3 - [English]". */
