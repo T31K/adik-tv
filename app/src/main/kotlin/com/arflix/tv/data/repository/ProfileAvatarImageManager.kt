@@ -11,7 +11,6 @@ import com.arflix.tv.util.ProfileAvatarFiles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -56,13 +55,6 @@ class ProfileAvatarImageManager @Inject constructor(
                 com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Error restoring avatar: ${e.message}")
             }
         }
-
-    // ADIK: stub, removed with cloud sync
-    @Suppress("UNUSED_PARAMETER")
-    fun buildInlineAvatarImagesJson(
-        profiles: List<Profile>,
-        existingImagesById: JSONObject? = null
-    ): JSONObject = JSONObject()
 
     fun clearLocalAvatar(profileId: String) {
         ProfileAvatarFiles.cleanupProfile(context, profileId)

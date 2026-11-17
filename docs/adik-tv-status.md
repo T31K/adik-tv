@@ -1,6 +1,6 @@
 # ADIK TV — Project Status & Architecture
 
-_Last updated: 2026-09-20_
+_Last updated: 2026-11-17 (v0.2.0: libVLC player, ARVIO purge, drive-safe downloads, /adik routes)_
 
 ADIK TV is a family media-streaming app for Android TV (a fork of ARVIO, Kotlin + Compose).
 It shows a movie library on the TV, downloads the movies onto a connected USB drive via
@@ -41,7 +41,7 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - `megaflix_rows` — dynamic home category rows: `id, title, sort_order`
   (row id encodes the filter: `cat_new` = recent, `cat_all`, `cat_g_<tmdbGenreId>` = genre)
 
-**Route** `routes/megaflix.js` (mounted `/megaflix`, read-only, token-gated → bad token = 404):
+**Route** `routes/megaflix.js` (mounted at both `/adik` and the legacy `/megaflix`, read-only, token-gated → bad token = 404). **v0.2.0+ apps call `/adik/feed.json`, `/adik/rev`, `/adik/rows`** (`MegaflixFeedApi`, base URL = API host root); older fleet builds still use `/megaflix/...`, so keep both mounts until every TV is on 0.2.0+.
 - `GET /megaflix/feed.json?k=TOKEN&limit&offset` → `{ total, offset, limit, items[] }` — each item carries `links[]` (falls back to `[link]`).
 - `GET /megaflix/rev?k=TOKEN` → `{ rev }` (COUNT + MAX(added_at); TV polls this ~60s. To force a fleet re-sync after editing rows without changing the count, bump: `UPDATE megaflix_items SET added_at = added_at + interval '1 second';`)
 - `GET /megaflix/rows?k=TOKEN` → `{ rows[] }` (ordered category rows)
@@ -75,7 +75,17 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - **applicationId** `com.adik.tv`; internal package stays `com.arflix.tv` (+ `com.arflix.tv.megaflix`). Internal names (endpoint `/megaflix`, table `megaflix_items`, `DriveManager.MEDIA_DIR="Megaflix"`) intentionally kept — invisible to users.
 - **Flat-file model:** feed `path` is a bare filename in a single `Megaflix/` folder on the drive.
 - **Series:** one feed row per episode (shared `tmdb_id` + season/episode); grouped into one show card; each episode plays its own flat file (resolved via `MegaflixLibraryBuilder.cachedEpisodePath`).
-- **Local playback:** files are handed to the player as **`file://` URIs** (a bare path gets `https://` prepended by the stream resolver → network error).
+- **Local playback:** files are handed to the player as **`file://` URIs**.
+- **What's left of ARVIO (v0.2.0 purge):** Home (hero + feed rows + continue watching), Details (TMDB metadata, seasons/episodes, cast, similar, local watchlist toggle), Search (TMDB search filtered to the library), Settings, local Profiles, the GitHub self-updater, crash reporting. Everything else — streams/addons/plugins (Cloudstream/QuickJS), IPTV/live TV/sports/EPG, Trakt/Simkl/MdbList, Supabase cloud sync + login, home server, Discord, Chromecast, launcher channels, the ExoPlayer/Media3 player (Dolby Vision, seek previews, skip-intro, AI subtitles), WorkManager — is deleted. Kotlin went from ~179.5k to ~37k lines. Only the `sideload` flavor exists.
+
+**Player — libVLC (`ui/screens/player/VlcPlayerScreen.kt` + `VlcPlayerViewModel.kt`, `org.videolan.android:libvlc-all:3.6.5`)**
+- Route `vlc_player?uri&title&tmdbId&type&season&episode&startMs` (`navigation/VlcPlayerRoute`, built from `LocalPlayRequest`); Details' Play/Resume and episode clicks call it directly.
+- Hardware decoding with automatic software fallback (`Media.setHWDecoderEnabled(true, false)`); on `EncounteredError` it retries once with hardware decoding off, then shows "Can't play this video".
+- Options from Settings (`util/PlayerPrefs.kt`, device-wide): preferred audio language (default `eng`), subtitles off by default unless a default language is set, subtitle size/colour/background box.
+- Remote: OK = play/pause + controls; Left/Right = −/+10 s (30/60/120 s while held); Up = controls; Down = controls, then the audio/subtitle track menu (embedded tracks + Off); Back = close menu → hide controls → exit; media keys (play/pause, FF/RW ±30 s, next episode, stop). Controls auto-hide after 4 s.
+- Progress: `data/repository/PlaybackProgressStore.kt` (DataStore `playback_progress_prefs`, profile-scoped, keyed tmdbId + TMDB season/episode). Saved every 3 s while playing, on pause, on exit; ≥90 % = watched. On first use per profile it imports the old `local_continue_watching_v1` list. Home's continue-watching row, Details' resume point / episode progress bars / watched checks all read it.
+- Series: at the end of an episode the next downloaded one (e+1, else next season e1, via `MegaflixLibraryBuilder.cachedEpisodePath`) plays in place.
+- `player/PlaybackState` (@Singleton `isPlaying`) is true while the player is open and in the foreground (backgrounding pauses playback and clears it).
 
 **`com.arflix.tv.megaflix` package**
 - `MegaflixFeedApi` / `FeedModels` — Retrofit + Gson (provider in `di/AppModule`).
@@ -83,11 +93,13 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - `DriveManager` — scans `/storage/*`, `/mnt/media_rw/*`, external volume roots for the `Megaflix/` folder (USB mount varies on TV); resolves flat filenames.
 - `SyncPlanner` (pure convergence) + `MegaflixSyncManager` (paged fetch, converge, declarative delete, rev poll, starts the download service). SyncPlanner preserves `PAUSED` records (the auto-sync never re-queues a user-paused item).
 - `TorrentEngine` — libtorrent4j `SessionManager`; downloads a magnet, reports **live stats** (`TorrentProgress`: %, download rate, bytes done, peers), returns the video file. All handle access is on libtorrent's own alert thread. **`requestPause()`/`requestStop()` are no-ops as of v0.1.10** — see the crash note in §8.
-- `MegaflixDownloadManager` — one-at-a-time queue; **downloads into per-item temp `Megaflix/.dl_<id>/`** then finalises the file to the flat name. `finalizeToFlat()` is robust (rename, else copy→fsync→intra-dir swap — a plain `renameTo` silently fails on the USB FUSE/FAT32 mount and used to strand finished files). `recoverStrandedDownloads()` runs at drain start: finalises complete leftovers, prunes orphans. Exposes `activeDownload` (live speed/ETA) + `pause/stop/start` (queued items only; active-item + swap disabled, see §8).
+- `MegaflixDownloadManager` — one-at-a-time queue. **v0.2.0 drive-safe downloads:** a torrent downloads into **internal storage `filesDir/dl/<id>/`** when free space ≥ item size + 1 GB, else into the drive temp `Megaflix/.dl_<id>/` as before (a partial resumes wherever it started). A finished internal download is piece-hash-checked where it sits, recorded as a pending move (`DownloadRecord.stagedPath`, shown as "Moving to drive…" in Settings), and copied to the flat drive name only while nothing plays — a copy cut short by playback restarts afterwards; `recoverStrandedDownloads` also scans `filesDir/dl/*` and resumes pending moves after a restart. While a movie plays: internal downloads keep going, new drive-temp downloads wait, and the library hash check, the hole scan and sync's rename-to-real-extension all wait. Drive-temp downloads still finalise to the flat name and are hash-checked there. `finalizeToFlat()` is robust (rename, else copy→fsync→intra-dir swap — a plain `renameTo` silently fails on the USB FUSE/FAT32 mount and used to strand finished files). `recoverStrandedDownloads()` runs at drain start: finalises complete leftovers, prunes orphans. Exposes `activeDownload` (live speed/ETA) + `pause/stop/start` (queued items only; active-item + swap disabled, see §8).
 - `DownloadRecord` — per-item state incl. `status` (READY/DOWNLOADING/COMING_SOON/FAILED/**PAUSED**), `progress`, `sizeBytes`, `linkIndex` (which ranked magnet — for the future auto-swap).
 - `DownloadService` — foreground service (notification) that drains the queue. A ~60s poller (in `HomeViewModel`) re-kicks it when idle with work pending.
 - `MegaflixLibraryBuilder` — builds `MediaItem`s from the feed via TMDB (posters/genres); caches the movie list by feed reference; `cachedMoviePath`/`cachedEpisodePath` restore localUri on the detail screen.
 - `StoragePermission` — All-files access (MANAGE_EXTERNAL_STORAGE), requested on launch until granted.
+
+**Settings** (rewritten in v0.2.0) has six tabs: Accounts (Device ID, Check for update, About), Downloads, Subtitles (VLC style + default subtitle language), Language (app UI + preferred audio), Appearance, Profiles.
 
 **Settings → Downloads tab** (`ui/screens/settings`, `"downloads"` section): live view of everything downloading — per-item title, % bar, MB/s + ETA + peers — plus queued/paused/failed groups and an on-drive count. OK on a row opens a Start/Pause/Stop sheet. Data is `SettingsUiState.downloads` (records × feed titles × live `activeDownloads`).
 
@@ -125,6 +137,8 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - **v0.1.11** — **fix: movies stopping partway through playback.** `recoverStrandedDownloads` judged a `.dl_<id>` partial "complete" by file length, but libtorrent allocates files at full size up front — so torrents killed mid-download (the 0.1.9/0.1.10 SIGSEGVs) were finalized with ~35–40% of their pieces missing (zero-filled); ExoPlayer stalls at the first hole. Recovery now never finalizes by size — it re-queues the partial and libtorrent re-checks/finishes it. New `VideoIntegrity` (one 4 KB sample per 16 MB; ≥2 all-zero samples = holes) scans READY files once after Home loads (fingerprints cached in DataStore) and deletes + re-queues broken ones. Dev TV: 22 of 61 movies were broken (Grand Budapest, Mad Max, Coco, Inception, Matrix, Titanic, …).
 - **v0.1.12** — **torrent hash check = "healthy" flag.** On TORRENT_FINISHED the alert thread copies the torrent's v1 piece hashes + the video file's offset into a plain `PieceManifest`; after `finalizeToFlat`, `PieceVerifier` re-hashes the FINAL flat file piece-by-piece (pieces straddling sibling files skipped). Full match → fingerprint stored in DataStore `healthy_files`; mismatch → delete + FAILED (retry). One-time library check: when the queue is empty, the drain hash-checks ONE unverified READY file per loop — `TorrentEngine.fetchManifest` (libtorrent4j `fetchMagnet`, metadata only, safe because no download listener is live) tries the record's magnet first then the alternates, matched by exact file size; broken → delete + re-queue on that link; no size match → "uncheckable" until next launch. `pollAndHeal` also kicks the service while unverified files remain. Settings → Downloads shows **Verified N/M**.
 
+- **v0.2.0** (versionCode 15, branch `v0.2-vlc-purge`) — **libVLC replaces ExoPlayer** (plays every container/codec off the drive; hardware decode with software fallback; English audio preferred; subtitles off by default; D-pad controls + track menu; resume + progress in the new local `PlaybackProgressStore`). **ARVIO purge** (~143k Kotlin lines + Media3/Supabase/Cast/Leanback/plugin-stack deps deleted; Settings rewritten to six tabs). **Drive-safe downloads** (internal-storage staging, moves/hash checks/hole scans wait for playback). Feed now on **`/adik/*`** routes.
+
 (Predecessor Megaflix builds shipped from `T31K/megaflix-tv` as com.megaflix.tv2 — now superseded.)
 
 ---
@@ -133,7 +147,7 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 
 - TV: Settings → System → About → click build 7× → Developer options → **USB debugging ON** (Wireless debugging greys out on Ethernet; plain USB debugging still exposes adb on `:5555`).
 - `adb connect 192.168.100.12:5555` (same LAN), tap **Allow** on the TV prompt.
-- Release builds are **not debuggable** (no `run-as`); use `adb logcat` (tags `PlaybackDiag`, `HubFix`, `ExoPlayer`) + `adb shell ls /storage/*/Megaflix/`.
+- Release builds are **not debuggable** (no `run-as`); use `adb logcat` (tags `VlcPlayer`, `MegaflixDownload`, `MegaflixSync`, `libvlc`) + `adb shell ls /storage/*/Megaflix/`.
 
 ---
 
@@ -150,7 +164,8 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - **Pause/Stop of the actively-downloading item** is disabled (queued items work). Comes back with the same fix.
 - **Crash residue:** an interrupted/corrupted `.dl_<id>` partial can jam resume (0% CPU, no progress); deleting the temp folder + relaunch clears it. Recovery prunes *complete* leftovers but not corrupt partials — worth a checksum/prune-on-resume pass.
 - Series: per-episode grouping is built + unit-tested but not yet exercised with real series in the feed.
-- Optional polish: libtorrent `rename_file` up-front (no temp folder), nightly WorkManager auto-sync, Settings "Sync now" + sound on/off toggles, capacity guard in the curator, Rotten Tomatoes via a baked-in MDBList key (`MdbListApi` already present).
+- Optional polish: libtorrent `rename_file` up-front (no temp folder), Settings "Sync now" + sound on/off toggles, capacity guard in the curator. (WorkManager and the MDBList client were removed in v0.2.0.)
+- v0.2.0 not yet exercised on a real TV: libVLC playback/track menu/seek feel, internal-storage staging + drive move timing, progress import from the old continue-watching list.
 - Bigger content seed (currently ~60 curated; ~230 fit on the drive).
 
 ---

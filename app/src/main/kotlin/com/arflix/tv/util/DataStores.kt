@@ -8,14 +8,11 @@ import androidx.datastore.preferences.preferencesDataStore
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
 
 /**
- * Per-profile boolean: pin the IPTV "Favorite TV" row to the top of the home screen.
- * Read by both HomeViewModel (placement) and SettingsViewModel (the toggle), so the
- * name lives here rather than being retyped in each. Defaults to true.
+ * Local watchlist (and the pre-v0.2 continue-watching list PlaybackProgressStore imports once).
+ * The file keeps its inherited name `trakt_prefs` so existing installs keep their data.
  */
-const val IPTV_FAVORITES_ON_HOME = "iptv_favorites_on_home"
-val Context.traktDataStore: DataStore<Preferences> by preferencesDataStore(name = "trakt_prefs")
+val Context.watchlistDataStore: DataStore<Preferences> by preferencesDataStore(name = "trakt_prefs")
 val Context.profilesDataStore: DataStore<Preferences> by preferencesDataStore(name = "profiles_prefs")
-val Context.authDataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_prefs")
 val Context.downloadsDataStore: DataStore<Preferences> by preferencesDataStore(name = "megaflix_downloads_prefs")
 /** Local playback progress (resume points + watched flags), profile-scoped keys. */
 val Context.playbackProgressDataStore: DataStore<Preferences> by preferencesDataStore(name = "playback_progress_prefs")

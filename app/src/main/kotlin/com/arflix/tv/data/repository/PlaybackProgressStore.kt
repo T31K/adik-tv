@@ -7,7 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.playbackProgressDataStore
-import com.arflix.tv.util.traktDataStore
+import com.arflix.tv.util.watchlistDataStore
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
@@ -47,7 +47,6 @@ data class PlaybackProgress(
 /**
  * Local-only playback progress, profile-scoped (DataStore `playback_progress_prefs`).
  *
- * Replaces the inherited Trakt "local continue watching" + Supabase watch history.
  * Keyed by tmdbId (+ season/episode for series). On first use per profile it imports
  * the old `local_continue_watching_v1` entries so existing resume points survive.
  */
@@ -211,7 +210,7 @@ class PlaybackProgressStore @Inject constructor(
         mutex.withLock {
             if (context.playbackProgressDataStore.data.first()[migratedKey] == true) return
             val oldJson = runCatching {
-                context.traktDataStore.data.first()[stringPreferencesKey("profile_${profileId}_local_continue_watching_v1")]
+                context.watchlistDataStore.data.first()[stringPreferencesKey("profile_${profileId}_local_continue_watching_v1")]
             }.getOrNull()
             val imported = runCatching { parseLegacy(oldJson) }.getOrDefault(emptyList())
             context.playbackProgressDataStore.edit { prefs ->

@@ -91,7 +91,6 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Category
-import com.arflix.tv.data.model.isPortrait
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
@@ -131,8 +130,6 @@ fun SearchScreen(
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int) -> Unit = { _, _ -> },
     onNavigateToHome: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onNavigateToWatchlist: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onNavigateToTv: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onBack: () -> Unit = {}
@@ -692,7 +689,7 @@ private fun RowsLayer(
                 val isCurrentRow = !isTouchDevice && isFocused && index == currentRowIndex
                 val rowKey = remember(category.id) { "search:${category.id}" }
                 val rowUsePosterCards = rememberCatalogueRowLayoutMode(rowKey) == CardLayoutMode.POSTER
-                val isPortrait = category.isPortrait(rowUsePosterCards)
+                val isPortrait = rowUsePosterCards
                 val itemWidth = if (isTouchDevice) {
                     if (isPortrait) 120.dp else 200.dp
                 } else {

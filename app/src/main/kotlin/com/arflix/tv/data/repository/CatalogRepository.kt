@@ -6,10 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.R
-import com.arflix.tv.data.model.Addon
 import com.arflix.tv.data.model.CatalogConfig
-import com.arflix.tv.data.model.CatalogPackManifest
-import com.arflix.tv.data.model.CatalogSourceType
 import com.arflix.tv.megaflix.DownloadStateStore
 import com.arflix.tv.megaflix.MegaflixFeedApi
 import com.arflix.tv.util.AppLogger
@@ -81,8 +78,7 @@ class CatalogRepository @Inject constructor(
         row("cat_all", "All Movies"),
     )
 
-    private fun row(id: String, title: String) =
-        CatalogConfig(id = id, title = title, sourceType = CatalogSourceType.LOCAL, isPreinstalled = false)
+    private fun row(id: String, title: String) = CatalogConfig(id = id, title = title)
 
     /** Feed rows, fetched once per process; defaults if the endpoint fails or is empty. */
     private suspend fun feedRows(): List<CatalogConfig> {
@@ -216,11 +212,6 @@ class CatalogRepository @Inject constructor(
 
     suspend fun replaceCatalogsForActiveProfile(catalogs: List<CatalogConfig>) =
         saveArrangement(activeProfileId(), catalogs)
-
-    /** Rows are feed-defined; the defaults argument is ignored. Returns the visible rows. */
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun ensurePreinstalledDefaults(defaultPreinstalled: List<CatalogConfig>): List<CatalogConfig> =
-        getCatalogs()
 
     /** Removing a feed row hides it for the active profile. */
     suspend fun removeCustomCatalog(catalogId: String): Result<Unit> {

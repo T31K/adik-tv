@@ -170,21 +170,6 @@ class DetailsViewModel @Inject constructor(
     private var seasonLoadRequestedSeason: Int = -1
     @Volatile private var initialLoadComplete = false
 
-    init {
-        viewModelScope.launch {
-            mediaRepository.episodeRatingsUpdated.collect { (tvId, seasonNumber) ->
-                if (tvId == currentMediaId && currentMediaType == MediaType.TV &&
-                    seasonNumber == _uiState.value.currentSeason
-                ) {
-                    val cached = mediaRepository.peekCachedSeasonEpisodes(tvId, seasonNumber)
-                    if (cached != null) {
-                        _uiState.value = _uiState.value.copy(episodes = decorateWatched(cached))
-                    }
-                }
-            }
-        }
-    }
-
     private fun showBudgetKey() = profileManager.profileBooleanKey("show_budget_on_home")
     private fun showEpisodeRatingsKey() = profileManager.profileBooleanKey("show_episode_ratings")
 
@@ -428,15 +413,6 @@ class DetailsViewModel @Inject constructor(
                                 totalSeasons = maxOf(state.totalSeasons, progress.progress.keys.maxOrNull() ?: 0, 1)
                             ).withPlayTarget(target, mediaType)
                         }
-                    }
-                }
-
-                launch {
-                    val imdbRating = loadDetailsPart("imdb rating") {
-                        mediaRepository.getImdbRating(mediaType, mediaId)
-                    }
-                    if (!imdbRating.isNullOrBlank()) {
-                        updateState { state -> state.copy(item = state.item?.copy(imdbRating = imdbRating)) }
                     }
                 }
 

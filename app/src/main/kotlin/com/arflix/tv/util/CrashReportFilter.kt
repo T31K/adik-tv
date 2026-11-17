@@ -41,27 +41,11 @@ object CrashReportFilter {
     )
 
     private val ignoredMessageFragments = listOf(
-        "not logged in",
         "job was cancelled",
         "was cancelled",
         "playback error displayed",
-        "selected stream playback failed",
-        "playback source list empty",
-        "playback imdb id missing",
-        "provided playback url could not be resolved",
-        "source lookup failed",
-        "complete epg backfill timed out",
-        "complete epg backfill returned empty guide",
-        "iptv load timed out",
-        "playlist loaded but contains no channels",
-        "m3u request failed",
         "expected url scheme 'http' or 'https'",
         "expected url scheme \"http\" or \"https\"",
-        "incomplete trakt watchlist fetch",
-        "trakt credentials not configured",
-        "trakt token request failed",
-        "trakt continue watching hydration returned zero items",
-        "trakt rate limit",
         "rate limit",
         "too many requests",
         "http 401",
@@ -76,13 +60,6 @@ object CrashReportFilter {
         "error_usage_exceeded",
         "send_error",
         "network_error",
-        "jwt expired",
-        "invalid jwt",
-        "token is expired",
-        "unable to parse or verify signature",
-        "supabase.co",
-        "auth/v1/logout",
-        "row-level security policy",
         "chain validation failed",
         "unable to resolve host",
         "failed to connect",
@@ -206,10 +183,7 @@ object CrashReportFilter {
     private fun handledExceptionSignature(throwable: Throwable, context: Map<String, String>): String {
         val root = rootCause(throwable)
         val area = context["error_area"].orEmpty()
-        val flow = context["cloud_flow"].orEmpty()
-        val phase = context["trakt_phase"]
-            ?: context["player_phase"]
-            ?: context["iptv_phase"]
+        val phase = context["player_phase"]
             ?: context["phase"]
             ?: ""
         val message = root.message
@@ -217,7 +191,7 @@ object CrashReportFilter {
             .replace(URL_PATTERN, "[URL]")
             .replace(TOKEN_PATTERN, "[TOKEN]")
             .take(140)
-        return "${root::class.java.name}|$area|$flow|$phase|$message"
+        return "${root::class.java.name}|$area|$phase|$message"
     }
 
     private fun rootCause(throwable: Throwable): Throwable {

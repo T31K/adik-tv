@@ -24,18 +24,8 @@ class CrashReportFilterTest {
     }
 
     @Test
-    fun `drops expected auth and backend diagnostics`() {
-        val throwable = RuntimeException(
-            "invalid JWT: unable to parse or verify signature, token has invalid claims: token is expired"
-        )
-
-        assertThat(CrashReportFilter.shouldReportHandledException(throwable)).isFalse()
-        assertThat(CrashReportFilter.shouldSendSentryEvent(throwable, SentryLevel.ERROR)).isFalse()
-    }
-
-    @Test
-    fun `drops expected trakt and provider diagnostics`() {
-        val throwable = IllegalStateException("Trakt token request failed: HTTP 429 Too Many Requests")
+    fun `drops expected rate limit diagnostics`() {
+        val throwable = IllegalStateException("Feed request failed: HTTP 429 Too Many Requests")
 
         assertThat(CrashReportFilter.shouldReportHandledException(throwable)).isFalse()
     }
@@ -50,7 +40,7 @@ class CrashReportFilterTest {
     @Test
     fun `drops provider network failures from handled reports`() {
         val throwable = IllegalStateException(
-            "Source lookup failed",
+            "Feed lookup failed",
             UnknownHostException("Unable to resolve host \"provider.example\"")
         )
 
@@ -58,7 +48,7 @@ class CrashReportFilterTest {
     }
 
     @Test
-    fun `drops supabase chain validation failures from handled reports`() {
+    fun `drops chain validation failures from handled reports`() {
         val throwable = RuntimeException(
             "HTTP request failed",
             SSLHandshakeException("Chain validation failed")
@@ -76,7 +66,7 @@ class CrashReportFilterTest {
 
     @Test
     fun `keeps fatal crashes with ignored message fragments`() {
-        val throwable = IllegalStateException("Trakt token request failed")
+        val throwable = IllegalStateException("Playback error displayed")
 
         assertThat(CrashReportFilter.shouldSendSentryEvent(throwable, SentryLevel.FATAL)).isTrue()
     }

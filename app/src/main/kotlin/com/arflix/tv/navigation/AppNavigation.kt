@@ -154,14 +154,10 @@ fun AppNavigation(
                 onNavigateToDetails = { mediaType, mediaId, initialSeason, initialEpisode ->
                     navController.navigate(Screen.Details.createRoute(mediaType, mediaId, initialSeason, initialEpisode))
                 },
-                onNavigateToCollection = { },
                 onNavigateToCategory = { categoryId ->
                     navController.navigate(Screen.CategoryViewAll.createRoute(categoryId))
                 },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
-                onNavigateToWatchlist = { },
-                onNavigateToTv = { _, _ -> },
-                onNavigateToPlayer = { _, _, _, _, _ -> },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
                 onSwitchProfile = switchProfile,
                 onProfileSwitched = {
@@ -184,8 +180,6 @@ fun AppNavigation(
                     navController.navigate(Screen.Details.createRoute(mediaType, mediaId))
                 },
                 onNavigateToHome = { navigateHome() },
-                onNavigateToWatchlist = { },
-                onNavigateToTv = { },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
                 onSwitchProfile = switchProfile,
                 onBack = { navigateHome() }
@@ -204,13 +198,9 @@ fun AppNavigation(
         ) { backStackEntry ->
             SettingsScreen(
                 currentProfile = currentProfile,
-                autoStartCloudAuth = false,
                 initialSection = backStackEntry.arguments?.getString("initialSection"),
-                installPackUrl = null,
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
-                onNavigateToTv = { },
-                onNavigateToWatchlist = { },
                 onSwitchProfile = switchProfile,
                 onBack = { navController.popBackStack() }
             )
@@ -222,10 +212,7 @@ fun AppNavigation(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.ProfileSelection.route) { inclusive = true }
                     }
-                },
-                onShowAddProfile = { /* Handled internally by ProfileSelectionScreen */ },
-                onConnectCloud = { },
-                isCloudConnected = false
+                }
             )
         }
 
@@ -289,11 +276,8 @@ fun AppNavigation(
                 onNavigateToDetails = { type, id ->
                     navController.navigate(Screen.Details.createRoute(type, id))
                 },
-                onNavigateToCollection = { },
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
-                onNavigateToTv = { },
-                onNavigateToWatchlist = { },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
                 onSwitchProfile = {
                     onSwitchProfile()

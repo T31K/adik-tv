@@ -1,12 +1,8 @@
 package com.arflix.tv.ui.components
 
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,18 +10,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -40,11 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.skin.resolveAccentColor
@@ -52,7 +41,6 @@ import com.arflix.tv.ui.theme.AnimationConstants
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R
-import com.arflix.tv.ui.theme.TextSecondary
 
 /**
  * Premium navigation sidebar with smooth animations
@@ -61,10 +49,6 @@ import com.arflix.tv.ui.theme.TextSecondary
 enum class SidebarItem(val icon: ImageVector, @StringRes val labelRes: Int) {
     SEARCH(Icons.Outlined.Search, R.string.search),
     HOME(Icons.Outlined.Movie, R.string.movies),
-    // ADIK: stub, removed with watchlist — never shown; kept until Details/Search/Settings drop their `when` branches.
-    WATCHLIST(Icons.Outlined.Bookmark, R.string.nav_library),
-    // ADIK: stub, removed with live TV — never shown; kept until Details/Search/Settings drop their `when` branches.
-    TV(Icons.Outlined.LiveTv, R.string.tv_shows),
     SETTINGS(Icons.Outlined.Settings, R.string.settings)
 }
 

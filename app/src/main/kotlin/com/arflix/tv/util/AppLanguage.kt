@@ -161,40 +161,23 @@ fun tr(text: String): String {
         "Display the movie budget on the home hero banner",
         "Budget" -> R.string.budget
         // Network
-        "Network",
-        "DNS Provider",
-        "Resolve API and stream requests" -> R.string.network
+        "Network" -> R.string.network
         // Catalogs / accounts
         "Catalogs",
-        "Add Catalog",
-        "Import a Trakt or MDBList catalog URL",
-        "Trakt/MDBList URLs can be added manually. Addon catalogs appear automatically." -> R.string.catalogs
+        "Add Catalog" -> R.string.catalogs
         "Accounts",
-        "Linked Accounts",
-        "Optional account for syncing profiles, addons, catalogs and IPTV settings" -> R.string.accounts
+        "Linked Accounts" -> R.string.accounts
         // Sources
-        "Sources",
-        "Off opens the source picker on Play" -> R.string.sources
+        "Sources" -> R.string.sources
         "Available Sources" -> R.string.available_sources
         "Finding sources..." -> R.string.finding_sources
         "sources available" -> R.string.sources_available
-        // IPTV
-        "Add Playlist",
-        "Create another IPTV list",
-        "Add Catalog",
         "Add" -> R.string.add
-        "Refresh IPTV Data",
-        "Reload playlists now",
-        "Reload playlist and EPG now",
         "Refresh" -> R.string.refresh
-        "Refreshing channels and EPG...",
         "Waiting for authorization... (Press OK to cancel)" -> R.string.loading_label
-        "Delete IPTV Playlists",
-        "Remove playlists, EPG and favorites",
         "Remove from Continue Watching",
         "Remove",
         "Delete" -> R.string.delete
-        "No playlists configured",
         "Empty" -> R.string.empty
         // Content
         "Details",
@@ -211,8 +194,7 @@ fun tr(text: String): String {
         "Your watchlist is empty" -> R.string.empty_watchlist
         "Add movies and shows to watch later" -> R.string.add_later
         "No results found",
-        "Unable to load content",
-        "ARVIO uses community streaming addons to find video sources. Without at least one streaming addon, content cannot be played." -> R.string.no_results
+        "Unable to load content" -> R.string.no_results
         "No results found for" -> R.string.no_results_for
         // Actions
         "Close",
@@ -356,12 +338,8 @@ private object AppLanguageRegexes {
                 "Titles, descriptions and metadata" to "Titels, beschrijvingen en metadata",
                 "Auto-select subtitle language" to "Ondertiteltaal automatisch kiezen",
                 "Preferred audio track" to "Voorkeurs-audiospoor",
-                "Off opens the source picker on Play" to "Uit opent de bronkiezer bij Afspelen",
                 "Show Budget on Home" to "Budget tonen op start",
                 "Display the movie budget on the home hero banner" to "Toon het filmbudget in de hero-banner",
-                "Trakt/MDBList URLs can be added manually. Addon catalogs appear automatically." to "Trakt/MDBList-URL's kunnen handmatig worden toegevoegd. Addon-catalogi verschijnen automatisch.",
-                "Optional account for syncing profiles, addons, catalogs and IPTV settings" to "Optioneel account voor synchronisatie van profielen, addons, catalogi en IPTV-instellingen",
-                "ARVIO uses community streaming addons to find video sources. Without at least one streaming addon, content cannot be played." to "ARVIO gebruikt streaming-addons uit de community om videobronnen te vinden. Zonder minimaal een streaming-addon kan inhoud niet worden afgespeeld.",
                 "Switch tabs • Navigate • BACK Close" to "Wissel tabs • Navigeer • TERUG sluiten",
                 "Waiting for authorization... (Press OK to cancel)" to "Wachten op autorisatie... (druk OK om te annuleren)"
             )
@@ -392,12 +370,8 @@ private object AppLanguageRegexes {
                 "Titles, descriptions and metadata" to "Títulos, descrições e metadados",
                 "Auto-select subtitle language" to "Selecionar idioma da legenda automaticamente",
                 "Preferred audio track" to "Faixa de áudio preferida",
-                "Off opens the source picker on Play" to "Desligado abre o seletor de fontes ao Reproduzir",
                 "Show Budget on Home" to "Mostrar Orçamento no Início",
                 "Display the movie budget on the home hero banner" to "Exibir o orçamento do filme no banner de destaque inicial",
-                "Trakt/MDBList URLs can be added manually. Addon catalogs appear automatically." to "URLs do Trakt/MDBList podem ser adicionadas manualmente. Catálogos de complementos aparecem automaticamente.",
-                "Optional account for syncing profiles, addons, catalogs and IPTV settings" to "Conta opcional para sincronizar perfis, complementos, catálogos e configurações de IPTV",
-                "ARVIO uses community streaming addons to find video sources. Without at least one streaming addon, content cannot be played." to "O ARVIO usa complementos de transmissão da comunidade para encontrar fontes de vídeo. Sem pelo menos um complemento, o conteúdo não poderá ser reproduzido.",
                 "Switch tabs • Navigate • BACK Close" to "Alternar abas • Navegar • VOLTAR Fechar",
                 "Waiting for authorization... (Press OK to cancel)" to "Aguardando autorização... (Pressione OK para cancelar)"
             )
@@ -518,10 +492,7 @@ private object AppLanguageRegexes {
         "TV" to "TV",
         "Settings" to settings,
         "General" to general,
-        "IPTV" to "IPTV",
-        "Iptv" to "IPTV",
         "Catalogs" to catalogs,
-        "Stremio" to "Addons",
         "Accounts" to accounts,
         "MY WATCHLIST" to watchlist.uppercase(Locale.ROOT),
         "Your watchlist is empty" to emptyWatchlist,
@@ -556,7 +527,6 @@ private object AppLanguageRegexes {
         "Auto-Play Next" to next,
         "Start next episode automatically" to next,
         "Autoplay" to auto,
-        "Off opens the source picker on Play" to sources,
         "Auto-Play Min Quality" to auto,
         "Min quality for auto-play" to auto,
         "Trailer Auto-Play" to trailer,
@@ -577,27 +547,11 @@ private object AppLanguageRegexes {
         "Show Budget on Home" to budget,
         "Display the movie budget on the home hero banner" to budget,
         "Network" to network,
-        "DNS Provider" to network,
-        "Resolve API and stream requests" to network,
         "Audio" to audio,
         "Volume Boost" to audio,
         "Amplify quiet sources (via system LoudnessEnhancer)" to audio,
-        "Add Playlist" to add,
-        "Add up to 3 M3U / Xtream IPTV lists with names" to "IPTV",
-        "Create another IPTV list" to add,
-        "Refresh IPTV Data" to refresh,
-        "Refreshing channels and EPG..." to loading,
-        "Reload playlists now" to refresh,
-        "Reload playlist and EPG now" to refresh,
-        "Delete IPTV Playlists" to delete,
-        "No playlists configured" to empty,
-        "Remove playlists, EPG and favorites" to delete,
         "Add Catalog" to add,
-        "Import a Trakt or MDBList catalog URL" to catalogs,
-        "Trakt/MDBList URLs can be added manually. Addon catalogs appear automatically." to catalogs,
         "Linked Accounts" to accounts,
-        "ARVIO Cloud" to "ARVIO Cloud",
-        "Optional account for syncing profiles, addons, catalogs and IPTV settings" to accounts,
         "App Update" to settings,
         "App Updates" to settings,
         "Unable to load content" to noResults,
@@ -638,7 +592,6 @@ private object AppLanguageRegexes {
         "Next Episode" to next,
         "Switch tabs • Navigate • BACK Close" to "$subtitles • $back • $close",
         "Switch tabs â€¢ Navigate â€¢ BACK Close" to "$subtitles • $back • $close",
-        "ARVIO uses community streaming addons to find video sources. Without at least one streaming addon, content cannot be played." to noResults,
         "No audio tracks available" to audio,
         "TRY AGAIN" to retry.uppercase(Locale.ROOT),
         "GO BACK" to back.uppercase(Locale.ROOT),
@@ -651,7 +604,6 @@ private object AppLanguageRegexes {
         "Next" to next,
         "LATER" to later.uppercase(Locale.ROOT),
         "LIVE" to live.uppercase(Locale.ROOT),
-        "IPTV is not configured" to "IPTV",
         "Back to channel list" to back,
         "Previous channel" to back,
         "Next channel" to next,

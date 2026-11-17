@@ -15,7 +15,6 @@ import com.arflix.tv.data.api.TmdbTvDetails
 import com.arflix.tv.data.api.TmdbWatchProviderRegion
 import com.arflix.tv.data.model.CastMember
 import com.arflix.tv.data.model.CatalogConfig
-import com.arflix.tv.data.model.CatalogSourceType
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.Episode
 import com.arflix.tv.data.model.MediaItem
@@ -31,8 +30,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -74,13 +71,6 @@ class MediaRepository @Inject constructor(
     private val playbackProgressStore: PlaybackProgressStore
 ) {
 
-    data class CategoryPageResult(
-        val items: List<MediaItem>,
-        val hasMore: Boolean,
-        val nextOffset: Int? = null,
-        val totalCount: Int? = null
-    )
-
     private val apiKey = Constants.TMDB_API_KEY
     private val gson = Gson()
 
@@ -107,10 +97,6 @@ class MediaRepository @Inject constructor(
     private val watchProvidersCache = ConcurrentHashMap<String, CacheEntry<StreamingServicesResult?>>()
     private val seasonEpisodesCache = ConcurrentHashMap<String, CacheEntry<List<Episode>>>()
     private val imdbIdCache = ConcurrentHashMap<String, String>()
-
-    // Never emits since episode IMDb ratings were removed; kept for DetailsViewModel.
-    private val _episodeRatingsUpdated = MutableSharedFlow<Pair<Int, Int>>(extraBufferCapacity = 1)
-    val episodeRatingsUpdated = _episodeRatingsUpdated.asSharedFlow()
 
     fun clearMediaCache() {
         detailsCache.clear()
@@ -181,10 +167,6 @@ class MediaRepository @Inject constructor(
     fun getCachedImdbId(mediaType: MediaType, mediaId: Int): String? =
         imdbIdCache[detailsCacheKey(mediaType, mediaId)]
 
-    // ADIK: stub, removed with addon (Cinemeta) IMDb ratings
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun getImdbRating(mediaType: MediaType, mediaId: Int, imdbId: String? = null): String? = null
-
     private suspend fun resolveExternalIds(mediaType: MediaType, mediaId: Int): TmdbExternalIds? {
         return try {
             when (mediaType) {
@@ -216,22 +198,6 @@ class MediaRepository @Inject constructor(
     private fun cacheItems(items: List<MediaItem>) {
         items.forEach { cacheItem(it) }
     }
-
-    // Home rows come only from the feed (CatalogRepository); there are no built-in catalogs.
-    fun getDefaultCatalogConfigs(): List<CatalogConfig> = emptyList()
-
-    companion object {
-        // ADIK: stub, removed with addon streaming-service collections
-        const val STREAMING_COLLECTION_ADDON_URL = ""
-    }
-
-    // ADIK: stub, removed with TMDB trending home rows
-    suspend fun getHomeCategories(): List<Category> = emptyList()
-
-    // ADIK: stub, removed with TMDB trending home rows
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun loadHomeCategoryPage(categoryId: String, page: Int): CategoryPageResult =
-        CategoryPageResult(emptyList(), hasMore = false)
 
     // ---- Local (feed-driven) library ------------------------------------------
 
@@ -267,23 +233,6 @@ class MediaRepository @Inject constructor(
     /** Per-episode local file for a series (flat model). Null if not downloaded. */
     fun megaflixEpisodePath(tmdbId: Int, season: Int, episode: Int): String? =
         megaflixLibrary.cachedEpisodePath(tmdbId, season, episode)
-
-    suspend fun loadCustomCatalog(catalog: CatalogConfig, maxItems: Int = 40): Category? =
-        if (catalog.sourceType == CatalogSourceType.LOCAL) loadLocalCatalog(catalog, maxItems) else null
-
-    /** Local rows are loaded whole (no server pagination), so only page 0 has items. */
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun loadCustomCatalogPage(
-        catalog: CatalogConfig,
-        offset: Int,
-        limit: Int
-    ): CategoryPageResult {
-        if (catalog.sourceType != CatalogSourceType.LOCAL || offset > 0) {
-            return CategoryPageResult(emptyList(), hasMore = false)
-        }
-        val cat = loadLocalCatalog(catalog, maxItems = 200)
-        return CategoryPageResult(cat?.items ?: emptyList(), hasMore = false)
-    }
 
 
     // ---- TMDB metadata --------------------------------------------------------
@@ -321,23 +270,6 @@ class MediaRepository @Inject constructor(
         cacheFullDetailsItem(item)
         return item
     }
-
-    // ADIK: only the launcher continue-watching row used these; delete with it.
-    suspend fun getLightweightMovieTitle(movieId: Int, language: String = contentLanguage): String? =
-        runCatching { tmdbApi.getMovieDetails(movieId, apiKey, language = language).title }.getOrNull()
-
-    suspend fun getLightweightTvTitle(tvId: Int, language: String = contentLanguage): String? =
-        runCatching { tmdbApi.getTvDetails(tvId, apiKey, language = language).name }.getOrNull()
-
-    suspend fun getLightweightEpisodeTitle(
-        tvId: Int,
-        seasonNumber: Int,
-        episodeNumber: Int,
-        language: String = contentLanguage
-    ): String? = runCatching {
-        tmdbApi.getTvSeason(tvId = tvId, seasonNumber = seasonNumber, apiKey = apiKey, language = language)
-            .episodes.firstOrNull { it.episodeNumber == episodeNumber }?.name
-    }.getOrNull()
 
     /** The TMDB collection (franchise) a movie belongs to, from /movie/{id}. */
     suspend fun getMovieCollectionRef(movieId: Int): com.arflix.tv.data.api.TmdbCollectionRef? {

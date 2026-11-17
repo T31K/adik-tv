@@ -287,13 +287,9 @@ private fun playerLanguageLabel(code: String): String =
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
-    @Suppress("UNUSED_PARAMETER") autoStartCloudAuth: Boolean = false,
     initialSection: String? = null,
-    @Suppress("UNUSED_PARAMETER") installPackUrl: String? = null,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onNavigateToTv: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onNavigateToWatchlist: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {

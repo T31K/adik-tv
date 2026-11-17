@@ -3,8 +3,6 @@ package com.arflix.tv.ui.screens.details
 import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.graphics.Bitmap
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
@@ -22,7 +20,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
@@ -76,15 +73,12 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
@@ -126,7 +120,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.foundation.lazy.list.TvLazyColumn
@@ -141,8 +134,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import coil.ImageLoader
 import coil.imageLoader
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.arflix.tv.R
@@ -151,17 +142,14 @@ import com.arflix.tv.data.model.Episode
 import com.arflix.tv.data.model.EpisodeIdentity
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.ui.components.EpisodeContextMenu
 import com.arflix.tv.ui.components.SeasonContextMenu
-import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.DetailsTvHeroLayout
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.PersonModal
-import com.arflix.tv.ui.components.PosterCard
 import com.arflix.tv.ui.components.resolveDetailsBackdropHeightDp
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.ui.components.SidebarItem
@@ -170,9 +158,7 @@ import com.arflix.tv.ui.components.SkeletonEpisodeCard
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.input.key.onKeyEvent
 import com.arflix.tv.ui.components.Toast
 import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
@@ -186,11 +172,9 @@ import com.arflix.tv.ui.skin.rememberArvioCardShape
 import com.arflix.tv.ui.skin.resolveAccentColor
 import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundCard
 import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.ui.theme.Pink
 import com.arflix.tv.ui.theme.Purple
-import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.Constants
@@ -223,11 +207,8 @@ fun DetailsScreen(
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onPlayLocal: (com.arflix.tv.navigation.LocalPlayRequest) -> Unit,
     onNavigateToDetails: (MediaType, Int) -> Unit,
-    onNavigateToCollection: (String) -> Unit = {},
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
-    onNavigateToWatchlist: () -> Unit = {},
-    onNavigateToTv: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onBack: () -> Unit
@@ -753,8 +734,6 @@ fun DetailsScreen(
                                     when (topBarFocusedItem(sidebarFocusIndex, hasProfile)) {
                                         SidebarItem.SEARCH -> onNavigateToSearch()
                                         SidebarItem.HOME -> onNavigateToHome()
-                                        SidebarItem.WATCHLIST -> onNavigateToWatchlist()
-                                        SidebarItem.TV -> onNavigateToTv()
                                         SidebarItem.SETTINGS -> onNavigateToSettings()
                                         null -> Unit
                                     }
@@ -948,10 +927,6 @@ fun DetailsScreen(
                         uiState.episodePlaybackProgress[episode.identity]?.positionMs,
                         episode.tmdbSeasonNumber, episode.tmdbEpisodeNumber
                     )
-                },
-                // ADIK: no sources to pick; the menu item is dropped from ContextMenu.kt by the coordinator.
-                onSelectSource = {
-                    showEpisodeContextMenu = false
                 },
                 onToggleWatched = {
                     viewModel.markEpisodeWatched(

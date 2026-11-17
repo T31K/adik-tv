@@ -53,7 +53,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -424,8 +423,6 @@ fun EpisodeContextMenu(
     seasonEpisode: String,
     isWatched: Boolean,
     onPlay: () -> Unit,
-    // ADIK: stub, removed with stream sources — ignored; kept until DetailsScreen stops passing it.
-    @Suppress("UNUSED_PARAMETER") onSelectSource: () -> Unit = {},
     onToggleWatched: () -> Unit,
     onDismiss: () -> Unit
 ) {

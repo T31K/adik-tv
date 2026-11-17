@@ -71,11 +71,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun ProfileSelectionScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
-    onProfileSelected: () -> Unit,
-    @Suppress("UNUSED_PARAMETER") onShowAddProfile: () -> Unit,
-    // ADIK: cloud login removed; kept so navigation's call site still compiles.
-    @Suppress("UNUSED_PARAMETER") onConnectCloud: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") isCloudConnected: Boolean = false
+    onProfileSelected: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

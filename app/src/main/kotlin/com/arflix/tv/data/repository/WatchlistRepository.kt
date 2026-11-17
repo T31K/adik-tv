@@ -8,7 +8,7 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
-import com.arflix.tv.util.traktDataStore
+import com.arflix.tv.util.watchlistDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -304,10 +304,6 @@ class WatchlistRepository @Inject constructor(
         getWatchlistItems()
     }
 
-    // ADIK: stub, removed with remote watchlist sync
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun syncFromTraktOrder(traktItems: List<MediaItem>) = Unit
-
     /**
      * Clear all caches (call on profile switch)
      */
@@ -318,20 +314,12 @@ class WatchlistRepository @Inject constructor(
         cacheLoaded = false
     }
 
-    // ADIK: stub, removed with cloud sync
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun exportWatchlistForProfile(profileId: String): List<LocalWatchlistItem> = emptyList()
-
-    // ADIK: stub, removed with cloud sync
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun importWatchlistForProfile(profileId: String, cloudItems: List<LocalWatchlistItem>) = Unit
-
     /**
      * Load raw watchlist items from DataStore
      */
     private suspend fun loadWatchlistRaw(): List<LocalWatchlistItem> {
         return try {
-            val prefs = context.traktDataStore.data.first()
+            val prefs = context.watchlistDataStore.data.first()
             val json = prefs[watchlistKey()] ?: return emptyList()
             (gson.fromJson<List<LocalWatchlistItem>>(json, WatchlistRepoTypeTokens.listType) ?: emptyList())
                 .sortedWith(compareBy<LocalWatchlistItem> { it.sourceOrder }.thenByDescending { it.addedAt })
@@ -354,7 +342,7 @@ class WatchlistRepository @Inject constructor(
      */
     private suspend fun saveWatchlist(items: List<LocalWatchlistItem>) {
         val json = gson.toJson(items)
-        context.traktDataStore.edit { prefs ->
+        context.watchlistDataStore.edit { prefs ->
             prefs[watchlistKey()] = json
         }
     }
@@ -370,7 +358,7 @@ class WatchlistRepository @Inject constructor(
         var storedItems = emptyList<LocalWatchlistItem>()
         val key = watchlistKey()
 
-        context.traktDataStore.edit { prefs ->
+        context.watchlistDataStore.edit { prefs ->
             val currentItems = parseWatchlistItems(prefs[key])
             val updatedItems = currentItems.map { raw ->
                 val enriched = enrichedByKey["${raw.mediaType}:${raw.tmdbId}"]

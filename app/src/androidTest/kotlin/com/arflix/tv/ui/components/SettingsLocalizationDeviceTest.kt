@@ -1,25 +1,12 @@
 package com.arflix.tv.ui.components
 
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Column
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.arflix.tv.R
-import com.arflix.tv.util.DeviceType
-import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.localizedAppContext
 import java.util.Locale
 import org.junit.After
 import org.junit.Assert.*
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,83 +27,6 @@ class SettingsLocalizationDeviceTest(private val language: String) {
         fun languages() = listOf("en", "de", "pt-BR")
     }
 
-    @Test fun translatedToggleKeepsSwitchAndChangesExactlyOncePerTap() {
-        val checked = mutableStateOf(false)
-        var clicks = 0
-        compose.setContent {
-            Localized(language) {
-                MobileSettingsRow(
-                    title = "Toggle",
-                    value = stringResource(if (checked.value) R.string.on else R.string.off),
-                    toggleChecked = checked.value,
-                    onClick = { clicks++; checked.value = !checked.value }
-                )
-            }
-        }
-        val row = compose.onNode(isToggleable())
-        row.assertIsOff().performClick().assertIsOn()
-        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, text(R.string.on)))
-        assertEquals(1, clicks)
-        assertTrue("On switch should be green", greenPixels(row) > 20)
-        row.performClick().assertIsOff()
-        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, text(R.string.off)))
-        assertEquals(2, clicks)
-        assertEquals(0, greenPixels(row))
-    }
-
-    @Test fun disabledLocalizedToggleDoesNotChangeState() {
-        var clicks = 0
-        compose.setContent {
-            Localized(language) {
-                MobileSettingsRow(
-                    title = "Disabled",
-                    value = stringResource(R.string.off),
-                    toggleChecked = false,
-                    enabled = false,
-                    onClick = { clicks++ }
-                )
-            }
-        }
-        compose.onNode(isToggleable()).assertIsOff().assertIsNotEnabled()
-            .performTouchInput { click() }
-        assertEquals(0, clicks)
-    }
-
-    @Test fun legacyRowsAndExplicitNonToggleValuesKeepTheirBehavior() {
-        compose.setContent {
-            Localized(language) {
-                Column {
-                    MobileSettingsRow(title = "Legacy on", value = "On", onClick = {})
-                    MobileSettingsRow(title = "Legacy off", value = "Off", onClick = {})
-                    MobileSettingsRow(title = "Language", value = "Off", isToggle = false, onClick = {})
-                }
-            }
-        }
-        compose.onAllNodes(isToggleable()).assertCountEquals(2)
-        compose.onNodeWithText("Legacy on").assertIsOn()
-        compose.onNodeWithText("Legacy off").assertIsOff()
-        compose.onNodeWithText("Language")
-            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ToggleableState))
-        compose.onNodeWithText(text(R.string.off)).assertIsDisplayed()
-    }
-
-    @Test fun changingAppLanguagePreservesBooleanToggleState() {
-        val locale = mutableStateOf(language)
-        var clicks = 0
-        compose.setContent {
-            Localized(locale.value) {
-                MobileSettingsRow(title = "Toggle", value = stringResource(R.string.on),
-                    toggleChecked = true, onClick = { clicks++ })
-            }
-        }
-        val next = if (language == "de") "en" else "de"
-        compose.runOnIdle { locale.value = next }
-        val expected = localizedAppContext(compose.activity, next).getString(R.string.on)
-        compose.onNode(isToggleable()).assertIsOn()
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, expected))
-        assertEquals(0, clicks)
-    }
-
     @Test fun formattedMessagesAndUntranslatedLocaleFallbackLoadCorrectly() {
         val context = localizedAppContext(compose.activity, language)
         assertEquals(
@@ -128,38 +38,16 @@ class SettingsLocalizationDeviceTest(private val language: String) {
             context.getString(R.string.settings_catalog_pack_included, 7)
         )
         assertEquals(
-            if (language == "de") "Autor: Example \u2022 v2.0" else "Author: Example \u2022 v2.0",
+            if (language == "de") "Autor: Example • v2.0" else "Author: Example • v2.0",
             context.getString(R.string.settings_catalog_pack_author, "Example", "2.0")
         )
         assertEquals(
-            if (language == "de") "Paket-URL eingeben \u2026" else "Enter Paket-URL...",
+            if (language == "de") "Paket-URL eingeben …" else "Enter Paket-URL...",
             context.getString(R.string.settings_input_hint_enter, "Paket-URL")
         )
         assertTrue(context.getString(R.string.settings_activation_visit_instruction, "https://example.test/pin")
             .contains("https://example.test/pin"))
         assertEquals(if (language == "pt-BR") "T2 E3" else "S2 E3",
             context.getString(R.string.player_season_episode_short, 2, 3))
-    }
-
-    @Composable private fun Localized(locale: String, content: @Composable () -> Unit) {
-        val context = localizedAppContext(compose.activity, locale)
-        CompositionLocalProvider(
-            LocalContext provides context,
-            LocalConfiguration provides context.resources.configuration,
-            LocalDeviceType provides DeviceType.PHONE,
-            content = content
-        )
-    }
-
-    private fun text(resource: Int) = localizedAppContext(compose.activity, language).getString(resource)
-
-    private fun greenPixels(node: SemanticsNodeInteraction): Int {
-        val pixels = node.captureToImage().toPixelMap()
-        var count = 0
-        for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
-            val color = pixels[x, y]
-            if (color.green > 0.5f && color.green > color.red * 1.5f && color.green > color.blue * 1.3f) count++
-        }
-        return count
     }
 }

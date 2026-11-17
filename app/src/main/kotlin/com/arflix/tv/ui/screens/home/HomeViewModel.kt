@@ -10,7 +10,6 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.arflix.tv.R
-import com.arflix.tv.data.model.CatalogSourceType
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
@@ -328,9 +327,7 @@ class HomeViewModel @Inject constructor(
 
     /** Feed rows (CatalogRepository's server-driven list) filled from the local library. */
     private suspend fun buildRows(): Pair<List<Category>, Map<String, MediaItem>> = coroutineScope {
-        val catalogs = catalogRepository.getCatalogs()
-            .filter { it.sourceType == CatalogSourceType.LOCAL }
-            .distinctBy { it.id }
+        val catalogs = catalogRepository.getCatalogs().distinctBy { it.id }
         val rows = catalogs.map { cfg ->
             async {
                 try {

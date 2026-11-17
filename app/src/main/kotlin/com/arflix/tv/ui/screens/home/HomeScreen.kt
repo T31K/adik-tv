@@ -14,18 +14,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import com.arflix.tv.R
 import androidx.compose.ui.draw.drawWithCache
@@ -42,7 +34,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,7 +42,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -84,7 +74,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -127,7 +116,6 @@ import coil.size.Precision
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import com.arflix.tv.data.model.isPortrait
 import com.arflix.tv.ui.components.movieGenreNameRes
 import com.arflix.tv.ui.components.tvGenreNameRes
 import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
@@ -156,7 +144,6 @@ import com.arflix.tv.ui.focus.rememberArvioDpadRepeatGate
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
 import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.skin.rememberArvioCardShape
-import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.ui.theme.AccentRed
@@ -171,7 +158,6 @@ import com.arflix.tv.util.parseRatingValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.abs
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -607,16 +593,8 @@ fun HomeScreen(
     preloadedLogoCache: Map<String, String> = emptyMap(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
-    // ADIK: stub, removed with collections — never invoked; kept until AppNavigation stops passing it.
-    @Suppress("UNUSED_PARAMETER") onNavigateToCollection: (String) -> Unit = {},
     onNavigateToCategory: (String) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
-    // ADIK: stub, removed with watchlist — never invoked; kept until AppNavigation stops passing it.
-    @Suppress("UNUSED_PARAMETER") onNavigateToWatchlist: () -> Unit = {},
-    // ADIK: stub, removed with live TV — never invoked; kept until AppNavigation stops passing it.
-    @Suppress("UNUSED_PARAMETER") onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
-    // ADIK: stub, removed with sports/stream playback — never invoked; kept until AppNavigation stops passing it.
-    @Suppress("UNUSED_PARAMETER") onNavigateToPlayer: (MediaType, Int, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onProfileSwitched: () -> Unit = {},
@@ -2587,7 +2565,7 @@ private fun MobileHomeRowsLayer(
             val isRanked = category.title.contains("Top 10", ignoreCase = true)
             val rowKey = remember(category.id) { "home:${category.id}" }
             val rowUsePosterCards = rememberCatalogueRowLayoutMode(rowKey) == CardLayoutMode.POSTER
-            val isPortrait = category.isPortrait(rowUsePosterCards)
+            val isPortrait = rowUsePosterCards
             val rowMobileItemWidth = if (isPortrait) 120.dp else 200.dp
             val rowState = rememberLazyListState()
 

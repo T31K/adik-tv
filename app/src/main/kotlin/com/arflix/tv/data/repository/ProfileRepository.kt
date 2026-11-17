@@ -117,10 +117,6 @@ class ProfileRepository @Inject constructor(
         }
     }
 
-    // ADIK: stub, removed with cloud sync
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun replaceProfilesFromCloud(profiles: List<Profile>, activeProfileId: String?) = Unit
-
     /** Create a default profile if none exist. */
     suspend fun createDefaultProfileIfNeeded(): Profile? {
         if (hasProfiles()) return null

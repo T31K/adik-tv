@@ -35,17 +35,7 @@ object OkHttpProvider {
     private const val HTTP_CACHE_SIZE = 50L * 1024L * 1024L
     private const val IMAGE_DISK_CACHE_SIZE = 48L * 1024L * 1024L
 
-    const val DNS_PROVIDER_PREF_KEY = "dns_provider_global"
-    const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    const val USER_AGENT_PREF_KEY = "custom_user_agent_global"
-
-    // ADIK: stub, removed with DNS-over-HTTPS (system DNS is always used)
-    enum class AppDnsProvider {
-        SYSTEM,
-        CLOUDFLARE,
-        GOOGLE,
-        ADGUARD
-    }
+    private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     /**
      * Must be called once from Application.onCreate() before any network calls.
@@ -62,42 +52,11 @@ object OkHttpProvider {
     @Volatile
     internal var appContext: Context? = null
 
-    @Volatile
-    private var _customUserAgent: String = ""
-
-    val customUserAgent: String get() = _customUserAgent
-    val userAgent: String get() = userAgentOr(DEFAULT_USER_AGENT)
-
-    fun getAppUserAgent(context: Context? = appContext): String {
-        val cleanVersion = BuildConfig.VERSION_NAME.substringBefore("-")
-        val platform = when (context?.let { com.arflix.tv.util.detectDeviceType(it) }) {
-            com.arflix.tv.util.DeviceType.PHONE -> "Android Mobile"
-            com.arflix.tv.util.DeviceType.TABLET -> "Android Tablet"
-            com.arflix.tv.util.DeviceType.TV -> "Android TV"
-            null -> "Android"
-        }
-        return "ARVIO/$cleanVersion ($platform)"
-    }
-
-    fun setCustomUserAgent(value: String) {
-        _customUserAgent = value.trim().takeIf(::isSafeHeaderValue).orEmpty()
-    }
-
-    fun userAgentOr(defaultUserAgent: String): String {
-        return _customUserAgent
-            .takeIf { it.isNotBlank() && isSafeHeaderValue(it) }
-            ?: defaultUserAgent.takeIf(::isSafeHeaderValue)
-            ?: DEFAULT_USER_AGENT
-    }
-
     private val clientLock = Any()
     private val appConnectionPool = ConnectionPool(16, 5, TimeUnit.MINUTES)
 
     @Volatile
     private var appClient: OkHttpClient? = null
-
-    @Volatile
-    private var playbackSharedClient: OkHttpClient? = null
 
     @Volatile
     private var appHttpCache: Cache? = null
@@ -120,27 +79,9 @@ object OkHttpProvider {
         }
     }
 
-    // ADIK: stub, removed with DNS-over-HTTPS
-    @Suppress("UNUSED_PARAMETER")
-    fun parseDnsProvider(raw: String?): AppDnsProvider = AppDnsProvider.SYSTEM
-
-    // ADIK: stub, removed with DNS-over-HTTPS
-    @Suppress("UNUSED_PARAMETER")
-    fun setDnsProvider(provider: AppDnsProvider) = Unit
-
     val client: OkHttpClient
         get() = appClient ?: synchronized(clientLock) {
             appClient ?: buildAppClient().also { appClient = it }
-        }
-
-    // ADIK: only the deleted streaming player used this; delete with it.
-    val playbackClient: OkHttpClient
-        get() = playbackSharedClient ?: synchronized(clientLock) {
-            playbackSharedClient ?: client.newBuilder()
-                .readTimeout(180, TimeUnit.SECONDS)
-                .cache(null)
-                .build()
-                .also { playbackSharedClient = it }
         }
 
     private fun buildAppClient(): OkHttpClient {
@@ -155,7 +96,7 @@ object OkHttpProvider {
         }
 
         val builder = OkHttpClient.Builder()
-            .addInterceptor(customUserAgentInterceptor)
+            .addInterceptor(userAgentInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -178,18 +119,14 @@ object OkHttpProvider {
         return builder.build()
     }
 
-    /** Applies the user's custom UA (or a browser UA) unless the call set its own. */
-    private val customUserAgentInterceptor = Interceptor { chain ->
+    /** Applies a browser UA unless the call set its own. */
+    private val userAgentInterceptor = Interceptor { chain ->
         val request = chain.request()
         if (request.header("User-Agent") != null) {
             chain.proceed(request)
         } else {
-            chain.proceed(request.newBuilder().header("User-Agent", userAgentOr(DEFAULT_USER_AGENT)).build())
+            chain.proceed(request.newBuilder().header("User-Agent", DEFAULT_USER_AGENT).build())
         }
-    }
-
-    private fun isSafeHeaderValue(value: String): Boolean {
-        return value.all { ch -> ch == '\t' || ch.code in 32..126 }
     }
 
     /** Marks unsuccessful responses `no-store` so the disk cache never keeps a failure. */

@@ -226,8 +226,7 @@ interface TmdbApi {
     /**
      * TMDB "collection" endpoint. Returns the explicit list of films that belong
      * to a franchise (e.g. Harry Potter = 1241, LOTR = 119, James Bond = 645).
-     * Used by the Collections feature to populate franchise rows without
-     * relying on external addons.
+     * Used by the Details franchise row.
      */
     @GET("collection/{collection_id}")
     suspend fun getTmdbCollection(
