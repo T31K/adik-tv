@@ -135,6 +135,44 @@ class PlaybackProgressStore @Inject constructor(
         }
     }
 
+    /**
+     * Manual watched toggle (Details screen). Watched → the entry is kept with
+     * `watched = true` at its full length; unwatched → the entry is dropped.
+     */
+    suspend fun setWatched(tmdbId: Int, mediaType: MediaType, season: Int?, episode: Int?, watched: Boolean, title: String = "") {
+        if (tmdbId <= 0) return
+        if (!watched) {
+            if (mediaType == MediaType.TV && season != null && episode != null) {
+                remove(tmdbId, mediaType, season, episode)
+            } else {
+                remove(tmdbId, mediaType)
+            }
+            return
+        }
+        val profileId = profileManager.getProfileIdSync()
+        migrateIfNeeded(profileId)
+        mutex.withLock {
+            context.playbackProgressDataStore.edit { prefs ->
+                val key = keyFor(profileId)
+                val current = decode(prefs[key])
+                val previous = current.firstOrNull { it.matches(tmdbId, mediaType, season, episode) }
+                val duration = previous?.durationMs?.takeIf { it > 0L } ?: 1L
+                val entry = PlaybackProgress(
+                    tmdbId = tmdbId,
+                    mediaType = mediaType,
+                    season = season,
+                    episode = episode,
+                    positionMs = duration,
+                    durationMs = duration,
+                    updatedAtMs = System.currentTimeMillis(),
+                    title = title.ifBlank { previous?.title.orEmpty() },
+                    watched = true
+                )
+                prefs[key] = gson.toJson((listOf(entry) + current.filterNot { it === previous }).take(MAX_ENTRIES))
+            }
+        }
+    }
+
     /** Drops a title (or one episode) from continue watching without marking it watched. */
     suspend fun remove(tmdbId: Int, mediaType: MediaType, season: Int? = null, episode: Int? = null) {
         val profileId = profileManager.getProfileIdSync()
