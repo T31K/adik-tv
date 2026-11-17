@@ -155,7 +155,10 @@ android {
             )
         }
         jniLibs {
-            useLegacyPackaging = false  // Required for 16KB page size support
+            // Compressed in the APK and extracted on install: halves the download
+            // (libVLC + libtorrent are ~110 MB uncompressed). Still 16 KB page-size
+            // safe because the .so files themselves are 16 KB-aligned ELFs.
+            useLegacyPackaging = true
             // libVLC ships its own libc++_shared.so; take one copy if another lib does too.
             pickFirsts += "**/libc++_shared.so"
         }

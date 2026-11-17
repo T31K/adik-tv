@@ -33,7 +33,7 @@
         android:allowBackup="false"
         android:banner="@drawable/app_banner"
         android:enableOnBackInvokedCallback="true"
-        android:extractNativeLibs="false"
+        android:extractNativeLibs="true"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@mipmap/ic_launcher"
