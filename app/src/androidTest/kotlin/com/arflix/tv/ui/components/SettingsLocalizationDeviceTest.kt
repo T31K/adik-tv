@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.arflix.tv.R
-import com.arflix.tv.ui.screens.tv.live.FullscreenHud
 import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.localizedAppContext
@@ -140,37 +139,6 @@ class SettingsLocalizationDeviceTest(private val language: String) {
             .contains("https://example.test/pin"))
         assertEquals(if (language == "pt-BR") "T2 E3" else "S2 E3",
             context.getString(R.string.player_season_episode_short, 2, 3))
-    }
-
-    @Test fun translatedLiveTvControlsStillDispatchTheCorrectActions() {
-        val configuration = compose.activity.resources.configuration
-        assumeTrue("The TV playback overlay requires a landscape display",
-            configuration.screenWidthDp > configuration.screenHeightDp)
-        val actions = mutableListOf<String>()
-        compose.setContent {
-            Localized(language) {
-                FullscreenHud(
-                    channel = null, nowNext = null, pokeSignal = 0,
-                    onPreviousCatchupClick = { actions += "previous" },
-                    onNextCatchupClick = { actions += "next" },
-                    onPlayPauseClick = { actions += "play-pause" },
-                    onRewindClick = { actions += "rewind" },
-                    onFastForwardClick = { actions += "forward" },
-                    onReplayClick = { actions += "replay" }
-                )
-            }
-        }
-        compose.mainClock.autoAdvance = false
-        listOf(R.string.live_cd_previous_channel, R.string.live_cd_rewind, R.string.live_cd_pause,
-            R.string.live_cd_fast_forward, R.string.live_cd_next_channel, R.string.live_cd_replay)
-            .forEach { resource ->
-                compose.onNodeWithContentDescription(text(resource)).performClick()
-                compose.mainClock.advanceTimeByFrame()
-            }
-        compose.onNodeWithContentDescription(text(R.string.play)).performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithContentDescription(text(R.string.live_cd_pause)).assertExists()
-        assertEquals(listOf("previous", "rewind", "play-pause", "forward", "next", "replay", "play-pause"), actions)
     }
 
     @Composable private fun Localized(locale: String, content: @Composable () -> Unit) {

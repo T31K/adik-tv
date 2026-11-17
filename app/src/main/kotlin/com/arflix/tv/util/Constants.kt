@@ -9,61 +9,22 @@ import com.arflix.tv.BuildConfig
  * committed source.
  */
 object Constants {
-    // Supabase - keys from BuildConfig (secrets.properties).
-    val SUPABASE_URL: String get() = BuildConfig.SUPABASE_URL
-    val SUPABASE_ANON_KEY: String get() = BuildConfig.SUPABASE_ANON_KEY
-    val APP_ANON_KEY: String get() = BuildConfig.APP_ANON_KEY
-    val NETLIFY_BACKEND_URL: String
-        get() = BuildConfig.NETLIFY_BACKEND_URL.trim().trimEnd('/')
-    val USE_NETLIFY_CLOUD_SYNC: Boolean
-        get() = BuildConfig.ENABLE_NETLIFY_CLOUD_SYNC && (NETLIFY_BACKEND_URL.startsWith("https://") || NETLIFY_BACKEND_URL.startsWith("http://"))
-
-    // Edge Function proxy URLs used by backend/proxy-capable flows.
-    val TMDB_PROXY_URL: String get() = "$NETLIFY_BACKEND_URL/tmdb-proxy"
-    val SIMKL_PROXY_URL: String get() = "$NETLIFY_BACKEND_URL/simkl-proxy"
-    val TV_AUTH_START_URL: String get() = "$NETLIFY_BACKEND_URL/tv-auth-start"
-    val TV_AUTH_STATUS_URL: String get() = "$NETLIFY_BACKEND_URL/tv-auth-status"
-    val TV_AUTH_POLL_URL: String get() = "$NETLIFY_BACKEND_URL/tv-auth-poll"
-    val TV_AUTH_COMPLETE_URL: String get() = "$NETLIFY_BACKEND_URL/tv-auth-complete"
-    val DISCORD_AUTH_START_URL: String get() = "$NETLIFY_BACKEND_URL/discord-auth-start"
-    val DISCORD_AUTH_STATUS_URL: String get() = "$NETLIFY_BACKEND_URL/discord-auth-status"
-    val AUTH_LOGIN_URL: String get() = "$NETLIFY_BACKEND_URL/auth-login"
-    val AUTH_REFRESH_URL: String get() = "$NETLIFY_BACKEND_URL/auth-refresh"
-    val AUTH_PASSWORD_START_URL: String get() = "$NETLIFY_BACKEND_URL/auth-password-start"
-    val CLOUD_AUTH_EMAIL_URL: String get() = "$NETLIFY_BACKEND_URL/cloud-auth-email"
-    val NETLIFY_ACCOUNT_SYNC_PULL_URL: String get() = "$NETLIFY_BACKEND_URL/account-sync-pull"
-    val NETLIFY_ACCOUNT_SYNC_PUSH_URL: String get() = "$NETLIFY_BACKEND_URL/account-sync-push"
-    val NETLIFY_ACCOUNT_SYNC_CURSOR_URL: String get() = "$NETLIFY_BACKEND_URL/account-sync-cursor"
-    val NETLIFY_ACCOUNT_SYNC_DELTA_URL: String get() = "$NETLIFY_BACKEND_URL/account-sync-delta"
-    val APP_USAGE_EVENT_URL: String get() = "$NETLIFY_BACKEND_URL/app-usage-event"
-
     // API base URLs.
     const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
-    const val TRAKT_API_URL = "https://api.trakt.tv/"
     // ADIK content feed (Postgres-backed, served by main-server under /adik; the
     // legacy /megaflix mount serves the same data). Paths live in MegaflixFeedApi.
     const val MEGAFLIX_FEED_BASE_URL = "https://api.kaleidoscopical.com/"
     const val MEGAFLIX_FEED_TOKEN = "mgfx_7b2cedc4b5f053072628a02e152d8a87"
     // This TV's fleet id is TYPED into Settings by the owner (never hardcoded
     // here — the valid list lives only in main-server routes/megaflix.js).
-    const val SIMKL_BASE_URL = "https://api.simkl.com/"
-    // MDBList is an optional per-profile tracking and ratings integration. Auth is a static
-    // API key passed as an `?apikey=` query parameter (no OAuth), so no client
-    // secret needs to ship in the APK.
-    const val MDBLIST_API_URL = "https://api.mdblist.com/"
 
     private fun usableSecret(value: String): String =
         value.takeUnless { candidate ->
             candidate.isBlank() || candidate.startsWith("your-", ignoreCase = true)
         } ?: ""
 
-    // Optional local direct-call credentials. Release builds should use the Edge
-    // Function proxies so these values do not have to be shipped in the client.
+    // TMDB key from secrets.properties (BuildConfig via the secrets plugin).
     val TMDB_API_KEY: String get() = usableSecret(BuildConfig.TMDB_API_KEY)
-    val TRAKT_CLIENT_ID: String get() = usableSecret(BuildConfig.TRAKT_CLIENT_ID)
-    val TRAKT_CLIENT_SECRET: String
-        get() = usableSecret(BuildConfig.TRAKT_CLIENT_SECRET)
-    val SIMKL_CLIENT_ID: String get() = usableSecret(BuildConfig.SIMKL_CLIENT_ID)
 
     // Image URLs - tuned for TV quality with smooth scrolling/perf.
     const val IMAGE_BASE = "https://image.tmdb.org/t/p/w780"
@@ -75,9 +36,6 @@ object Constants {
     const val LOGO_BASE = "https://image.tmdb.org/t/p/w500"
     const val LOGO_BASE_LARGE = "https://image.tmdb.org/t/p/original"
 
-    // Google Sign-In - key from BuildConfig (secrets.properties).
-    val GOOGLE_WEB_CLIENT_ID: String get() = BuildConfig.GOOGLE_WEB_CLIENT_ID
-
     // Progress thresholds.
     const val WATCHED_THRESHOLD = 90
     const val MIN_PROGRESS_THRESHOLD = 3
@@ -88,7 +46,6 @@ object Constants {
     const val PREFS_NAME = "arflix_prefs"
     const val PREF_DEFAULT_SUBTITLE = "default_subtitle"
     const val PREF_AUTO_PLAY_NEXT = "auto_play_next"
-    const val PREF_TRAKT_TOKEN = "trakt_token"
 }
 
 /**

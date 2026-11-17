@@ -85,17 +85,6 @@ class AppBottomBarResponsiveLayoutTest {
     }
 
     @Test
-    fun mobileLoginHidesBottomBar() {
-        val showBar = shouldShowBottomBar(
-            isMobile = true,
-            currentRoute = com.arflix.tv.navigation.Screen.Login.route,
-            isFullscreenRoute = false
-        )
-
-        assertThat(showBar).isFalse()
-    }
-
-    @Test
     fun mobilePlayerFullscreenHidesBottomBar() {
         val showBar = shouldShowBottomBar(
             isMobile = true,

@@ -28,8 +28,7 @@ class HomeNavigationRefreshDeviceTest {
                 contentStartPadding = 24.dp, fastScrollThresholdMs = 80L,
                 usePosterCards = false, isContextMenuOpen = false, currentProfile = null,
                 onNavigateToDetails = { _, id, _, _ -> opened = id },
-                onNavigateToCollection = {}, onNavigateToSearch = {}, onNavigateToWatchlist = {},
-                onNavigateToTv = { _, _ -> }, onNavigateToSettings = {}, onSwitchProfile = {},
+                onNavigateToSearch = {}, onNavigateToSettings = {}, onSwitchProfile = {},
                 onExitApp = {}, onOpenContextMenu = { _, _ -> },
             )
         }

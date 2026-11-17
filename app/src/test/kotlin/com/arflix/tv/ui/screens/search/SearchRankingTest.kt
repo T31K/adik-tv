@@ -46,15 +46,5 @@ class SearchRankingTest {
         assertEquals(listOf(movie, show), rankSearchResults("test", listOf(movie, movie, show)))
     }
 
-    @Test fun titlesDoNotAccidentallyTriggerSmartDiscovery() {
-        listOf("Best in Show", "New Police Story", "The New Adventures of Old Christine", "Top Boy", "Popular", "New Girl")
-            .forEach { assertFalse(it, isSmartDiscoveryQuery(it)) }
-    }
-
-    @Test fun explicitDiscoveryAndSimilarQueriesStillWork() {
-        listOf("best comedy movies", "top 10 movies", "latest tv shows", "popular anime", "movies like Alien")
-            .forEach { assertTrue(it, isSmartDiscoveryQuery(it)) }
-    }
-
     private fun item(id: Int, title: String, type: MediaType = MediaType.MOVIE) = MediaItem(id = id, title = title, mediaType = type)
 }
