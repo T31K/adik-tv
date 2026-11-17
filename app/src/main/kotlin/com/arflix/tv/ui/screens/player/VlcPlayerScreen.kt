@@ -172,6 +172,8 @@ fun VlcPlayerScreen(
                     }
                 }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Diagnostics for the "can't pause" report (warn level survives release builds).
+                android.util.Log.w("VlcKeys", "key=${native.keyCode} repeat=${native.repeatCount} playing=${state.isPlaying} loading=${state.isLoading} controls=$controlsVisible")
                 when (native.keyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                     AndroidKeyEvent.KEYCODE_ENTER,
