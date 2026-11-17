@@ -20,26 +20,6 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- ARVIO only uses Discord Rich Presence, not the SDK's voice stack. -->
-    <uses-permission
-        android:name="android.permission.RECORD_AUDIO"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.MODIFY_AUDIO_SETTINGS"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT"
-        tools:node="remove" />
-
     <!-- TV Features (not required so the same APK installs on phones/tablets) -->
     <uses-feature
         android:name="android.software.leanback"
@@ -47,18 +27,6 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
-
-    <queries>
-        <package android:name="com.discord" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="discord" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" android:host="discord.com" />
-        </intent>
-    </queries>
 
     <application
         android:name=".ArflixApplication"
@@ -77,10 +45,6 @@
         android:theme="@style/Theme.ArflixTV"
         android:usesCleartextTraffic="true">
 
-        <service
-            android:name="com.discord.socialsdk.ForegroundService"
-            tools:node="remove" />
-
         <!-- Megaflix: foreground service that torrents feed items onto the USB drive. -->
         <service
             android:name=".megaflix.DownloadService"
@@ -98,10 +62,6 @@
         <meta-data
             android:name="firebase_crashlytics_collection_enabled"
             android:value="false" />
-
-        <meta-data
-            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
-            android:value="com.arflix.tv.cast.CastOptionsProvider" />
 
         <!-- Main Activity - Compose Host -->
         <activity
@@ -125,22 +85,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- Custom Scheme: arvio://install-pack?url=... -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="arvio" android:host="install-pack" />
-            </intent-filter>
-
-            <!-- Discord Auth Callback Deep-Link -->
-            <intent-filter android:label="Discord Auth Callback">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="arvio" android:host="discord" android:path="/auth" />
-            </intent-filter>
         </activity>
 
         <!-- Crash Report Activity -->
@@ -151,30 +95,18 @@
             android:process=":crash"
             android:theme="@style/Theme.ArflixTV" />
 
-        <!-- Disable default WorkManager initialization for Hilt -->
+        <!-- Skip startup initializers the app doesn't need. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
             android:exported="false"
             tools:node="merge">
             <meta-data
-                android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-            <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
             <meta-data
-                android:name="io.github.jan.supabase.gotrue.SupabaseInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-            <meta-data
                 android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-            <meta-data
-                android:name="com.russhwolf.settings.SettingsInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>

@@ -21,17 +21,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.arflix.tv.BuildConfig
 import com.arflix.tv.R
 
 @Composable
 fun AboutCreditsDialog(onDismiss: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
     val closeFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = Color(0xFF181818), contentColor = Color.White) {
@@ -40,7 +39,8 @@ fun AboutCreditsDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("ARVIO", fontSize = 28.sp)
+                Text("ADIK TV", fontSize = 28.sp)
+                Text("Version ${BuildConfig.VERSION_NAME}", fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f))
                 Text(stringResource(R.string.about_credits), fontSize = 20.sp)
                 AsyncImage(
                     model = "file:///android_asset/tmdb-logo.svg",
@@ -49,16 +49,8 @@ fun AboutCreditsDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.width(100.dp).height(16.dp)
                 )
                 Text(stringResource(R.string.tmdb_attribution))
-                Text(stringResource(R.string.thesportsdb_attribution))
-                Button(
-                    onClick = { runCatching { uriHandler.openUri("https://www.thesportsdb.com") } },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)
-                ) { Text("TheSportsDB") }
-                Text(stringResource(R.string.authorized_sources_notice))
-                Button(
-                    onClick = { runCatching { uriHandler.openUri("https://arvio.tv/credits/") } },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White)
-                ) { Text(stringResource(R.string.credits_and_copyright)) }
+                Text("Video playback by libVLC (VideoLAN), licensed under the LGPL.")
+                Text("Downloads by libtorrent.")
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.focusRequester(closeFocus),

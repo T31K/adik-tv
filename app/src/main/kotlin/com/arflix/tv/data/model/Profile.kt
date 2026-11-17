@@ -3,7 +3,7 @@ package com.arflix.tv.data.model
 import java.util.UUID
 
 /**
- * User profile - each profile has independent settings, Trakt, addons, etc.
+ * User profile - each profile has independent settings, watchlist and playback progress.
  */
 data class Profile(
     val id: String = UUID.randomUUID().toString(),

@@ -70,14 +70,12 @@ internal fun normalizeWatchlistArtworkUrl(rawValue: String?, isBackdrop: Boolean
 class WatchlistRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val profileManager: ProfileManager,
-    private val tmdbApi: TmdbApi,
-    private val invalidationBus: CloudSyncInvalidationBus
+    private val tmdbApi: TmdbApi
 ) {
     private val gson = Gson()
 
     // Profile-scoped DataStore key
     private fun watchlistKey() = profileManager.profileStringKey("local_watchlist_v1")
-    private fun watchlistKeyFor(profileId: String) = profileManager.profileStringKeyFor(profileId, "local_watchlist_v1")
 
     // In-memory cache for quick lookups
     private val keyCache = mutableSetOf<String>()
@@ -306,60 +304,9 @@ class WatchlistRepository @Inject constructor(
         getWatchlistItems()
     }
 
-    /**
-     * Reorder the local watchlist to match Trakt's newest-first list.
-     * Mirrors Trakt's newest-first order and drops stale local entries. Keeping
-     * local-only items here lets old bad title-search matches survive forever
-     * after Trakt has the correct IDs.
-     */
-    suspend fun syncFromTraktOrder(traktItems: List<MediaItem>) = withContext(Dispatchers.IO) {
-        val existing = loadWatchlistRaw()
-        val existingByKey = existing.associateBy { "${it.mediaType}:${it.tmdbId}" }
-
-        val ordered = mutableListOf<LocalWatchlistItem>()
-
-        // Trakt items are already newest-first by listed_at.
-        val orderedTraktItems = traktItems.toTraktOrder()
-        for ((index, item) in orderedTraktItems.withIndex()) {
-            val typeStr = if (item.mediaType == MediaType.TV) "tv" else "movie"
-            val key = "$typeStr:${item.id}"
-            val local = existingByKey[key]
-            val traktOrderAddedAt = item.addedAt.takeIf { it > 0L } ?: (System.currentTimeMillis() - index)
-            ordered.add(
-                local?.copy(
-                    title = item.title.ifBlank { local.title },
-                    posterPath = normalizeWatchlistArtworkUrl(item.image, isBackdrop = false)
-                        ?: normalizeWatchlistArtworkUrl(local.posterPath, isBackdrop = false),
-                    backdropPath = normalizeWatchlistArtworkUrl(item.backdrop, isBackdrop = true)
-                        ?: normalizeWatchlistArtworkUrl(local.backdropPath, isBackdrop = true),
-                    addedAt = traktOrderAddedAt,
-                    sourceOrder = index
-                ) ?: LocalWatchlistItem(
-                    tmdbId = item.id,
-                    mediaType = typeStr,
-                    title = item.title,
-                    posterPath = normalizeWatchlistArtworkUrl(item.image, isBackdrop = false),
-                    backdropPath = normalizeWatchlistArtworkUrl(item.backdrop, isBackdrop = true),
-                    addedAt = traktOrderAddedAt,
-                    sourceOrder = index
-                )
-            )
-        }
-
-        saveWatchlist(ordered)
-
-        // Invalidate enriched cache so the UI picks up the new order on next refresh.
-        cacheMutex.withLock {
-            itemsCache.clear()
-            keyCache.clear()
-            ordered.forEach { raw ->
-                val type = if (raw.mediaType == "tv") MediaType.TV else MediaType.MOVIE
-                keyCache.add(cacheKey(type, raw.tmdbId))
-            }
-            _watchlistItems.value = ordered.map { it.toBasicMediaItem() }
-            cacheLoaded = true
-        }
-    }
+    // ADIK: stub, removed with remote watchlist sync
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun syncFromTraktOrder(traktItems: List<MediaItem>) = Unit
 
     /**
      * Clear all caches (call on profile switch)
@@ -371,108 +318,13 @@ class WatchlistRepository @Inject constructor(
         cacheLoaded = false
     }
 
-    suspend fun exportWatchlistForProfile(profileId: String): List<LocalWatchlistItem> {
-        val safeProfileId = profileId.trim().ifBlank { "default" }
-        return try {
-            val prefs = context.traktDataStore.data.first()
-            val json = prefs[watchlistKeyFor(safeProfileId)] ?: return emptyList()
-            gson.fromJson<List<LocalWatchlistItem>>(json, WatchlistRepoTypeTokens.listType) ?: emptyList()
-        } catch (error: kotlinx.coroutines.CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            AppLogger.recordException(
-                throwable = error,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "export_profile"
-                )
-            )
-            emptyList()
-        }
-    }
+    // ADIK: stub, removed with cloud sync
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun exportWatchlistForProfile(profileId: String): List<LocalWatchlistItem> = emptyList()
 
-    suspend fun importWatchlistForProfile(profileId: String, cloudItems: List<LocalWatchlistItem>) {
-        val safeProfileId = profileId.trim().ifBlank { "default" }
-
-        // Union merge local and cloud items to prevent offline additions from being wiped
-        val localJson = try {
-            context.traktDataStore.data.first()[watchlistKeyFor(safeProfileId)]
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            AppLogger.recordException(
-                throwable = e,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "import_read_local",
-                    "profile_id" to safeProfileId
-                )
-            )
-            // Abort the import to prevent overwriting/wiping local-only entries when read fails
-            return
-        }
-
-        val localItems: List<LocalWatchlistItem> = if (localJson != null) {
-            try {
-                gson.fromJson<List<LocalWatchlistItem>>(localJson, WatchlistRepoTypeTokens.listType) ?: emptyList()
-            } catch (e: com.google.gson.JsonSyntaxException) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-
-        val combinedMap = mutableMapOf<String, LocalWatchlistItem>()
-        cloudItems.forEach { item ->
-            combinedMap["${item.mediaType}:${item.tmdbId}"] = item
-        }
-        localItems.forEach { item ->
-            val key = "${item.mediaType}:${item.tmdbId}"
-            val existing = combinedMap[key]
-            if (existing == null || item.addedAt > existing.addedAt) {
-                combinedMap[key] = item
-            }
-        }
-
-        val mergedList = combinedMap.values.sortedWith(compareBy<LocalWatchlistItem> { it.sourceOrder }.thenByDescending { it.addedAt })
-        val json = try {
-            gson.toJson(mergedList)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            AppLogger.recordException(
-                throwable = e,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "import_serialize",
-                    "profile_id" to safeProfileId
-                )
-            )
-            // Abort import to avoid writing an empty list on serialization failure
-            return
-        }
-
-        try {
-            context.traktDataStore.edit { prefs ->
-                prefs[watchlistKeyFor(safeProfileId)] = json
-            }
-            invalidationBus.markDirty(CloudSyncScope.WATCHLIST, safeProfileId, "import watchlist")
-            if (profileManager.getProfileIdSync() == safeProfileId) {
-                clearWatchlistCache()
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            AppLogger.recordException(
-                throwable = e,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "import_write",
-                    "profile_id" to safeProfileId
-                )
-            )
-        }
-    }
+    // ADIK: stub, removed with cloud sync
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun importWatchlistForProfile(profileId: String, cloudItems: List<LocalWatchlistItem>) = Unit
 
     /**
      * Load raw watchlist items from DataStore
@@ -505,13 +357,9 @@ class WatchlistRepository @Inject constructor(
         context.traktDataStore.edit { prefs ->
             prefs[watchlistKey()] = json
         }
-        invalidationBus.markDirty(CloudSyncScope.WATCHLIST, profileManager.getProfileIdSync(), "save watchlist")
     }
 
-    /**
-     * Artwork is cache metadata, not a user watchlist change. Persist it locally so
-     * cold starts have thumbnails without creating a cloud-sync write on every load.
-     */
+    /** Persist enriched artwork locally so cold starts have thumbnails. */
     private suspend fun persistEnrichedArtwork(enrichedItems: List<MediaItem>): List<LocalWatchlistItem> {
         if (enrichedItems.isEmpty()) return loadWatchlistRaw()
 
@@ -643,13 +491,6 @@ class WatchlistRepository @Inject constructor(
             backdrop = normalizeWatchlistArtworkUrl(backdropPath, isBackdrop = true),
             addedAt = addedAt,
             sourceOrder = sourceOrder
-        )
-    }
-
-    private fun List<MediaItem>.toTraktOrder(): List<MediaItem> {
-        return sortedWith(
-            compareBy<MediaItem> { it.sourceOrder }
-                .thenByDescending { it.addedAt }
         )
     }
 

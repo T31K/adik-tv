@@ -160,7 +160,7 @@ fun CategoryViewAllScreen(
                     )
                 } else {
                     Text(
-                        text = stringResource(R.string.collection_empty),
+                        text = stringResource(R.string.no_results),
                         color = TextSecondary,
                         style = ArflixTypography.body
                     )

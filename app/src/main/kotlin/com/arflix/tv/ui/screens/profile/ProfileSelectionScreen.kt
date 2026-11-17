@@ -4,9 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,18 +16,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,12 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -81,9 +72,10 @@ import kotlinx.coroutines.delay
 fun ProfileSelectionScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
     onProfileSelected: () -> Unit,
-    onShowAddProfile: () -> Unit,
-    onConnectCloud: () -> Unit = {},
-    isCloudConnected: Boolean = false
+    @Suppress("UNUSED_PARAMETER") onShowAddProfile: () -> Unit,
+    // ADIK: cloud login removed; kept so navigation's call site still compiles.
+    @Suppress("UNUSED_PARAMETER") onConnectCloud: () -> Unit = {},
+    @Suppress("UNUSED_PARAMETER") isCloudConnected: Boolean = false
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -282,9 +274,7 @@ fun ProfileSelectionScreen(
                                 onAvatarPositioned = { coords ->
                                     avatarCoordinatesMap[profile.id] = coords
                                 },
-                                onClick = { handleProfileClick(profile) },
-                                onFocus = { viewModel.preloadForProfile(profile) },
-                                onDelete = { viewModel.deleteProfile(profile) }
+                                onClick = { handleProfileClick(profile) }
                             )
                         }
 
@@ -307,9 +297,7 @@ fun ProfileSelectionScreen(
                                 onAvatarPositioned = { coords ->
                                     avatarCoordinatesMap[profile.id] = coords
                                 },
-                                onClick = { handleProfileClick(profile) },
-                                onFocus = { viewModel.preloadForProfile(profile) },
-                                onDelete = { viewModel.deleteProfile(profile) }
+                                onClick = { handleProfileClick(profile) }
                             )
 
                             if (index < uiState.profiles.size - 1 || uiState.profiles.size < 5) {
@@ -324,8 +312,6 @@ fun ProfileSelectionScreen(
                 Spacer(modifier = Modifier.height(48.dp))
 
                 // Megaflix: fixed profiles — no Manage Profiles.
-
-                // Megaflix: local-only — no cloud connect.
             }
         }
 
@@ -484,9 +470,7 @@ private fun ProfileAvatar(
     isTransitionSelected: Boolean = false,
     modifier: Modifier = Modifier,
     onAvatarPositioned: (LayoutCoordinates) -> Unit = {},
-    onClick: () -> Unit,
-    onFocus: () -> Unit = {},
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     var isFocused by remember { mutableIntStateOf(0) }
     // Megaflix: active/focused profile shows a border only — no size change.
@@ -523,11 +507,7 @@ private fun ProfileAvatar(
                     modifier = Modifier
                         .size(avatarSize)
                         .onFocusChanged { focusState ->
-                            val wasFocused = isFocused > 0
                             isFocused = if (focusState.isFocused) 1 else 0
-                            if (!wasFocused && focusState.isFocused) {
-                                onFocus()
-                            }
                         },
                     shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
                     colors = ClickableSurfaceDefaults.colors(
@@ -573,199 +553,5 @@ private fun ProfileAvatar(
             textAlign = TextAlign.Center
         )
 
-    }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun AddProfileButton(
-    avatarSize: Dp = 120.dp,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableIntStateOf(0) }
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused > 0) 1.1f else 1f,
-        animationSpec = tween(150),
-        label = "scale"
-    )
-
-    val isTouchDevice = LocalDeviceType.current.isTouchDevice()
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-    ) {
-        val addContent: @Composable () -> Unit = {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
-            }
-        }
-        if (isTouchDevice) {
-            Box(
-                modifier = Modifier
-                    .size(avatarSize)
-                    .scale(scale)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.1f))
-                    .border(2.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                    .clickable { onClick() }
-            ) { addContent() }
-        } else {
-            Surface(
-                onClick = onClick,
-                modifier = Modifier
-                    .size(avatarSize)
-                    .scale(scale)
-                    .onFocusChanged { isFocused = if (it.isFocused) 1 else 0 },
-                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = Color.White.copy(alpha = 0.1f),
-                    focusedContainerColor = Color.White.copy(alpha = 0.2f)
-                ),
-                border = ClickableSurfaceDefaults.border(
-                    border = androidx.tv.material3.Border(
-                        border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.3f)),
-                        shape = RoundedCornerShape(8.dp)
-                    ),
-                    focusedBorder = androidx.tv.material3.Border(
-                        border = androidx.compose.foundation.BorderStroke(3.dp, Color.White),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                )
-            ) { addContent() }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = stringResource(R.string.add_profile),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun ManageProfilesButton(
-    isManageMode: Boolean,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableIntStateOf(0) }
-
-    val isTouchDevice = LocalDeviceType.current.isTouchDevice()
-    Surface(
-        onClick = if (isTouchDevice) ({}) else onClick,
-        modifier = Modifier
-            .then(
-                if (isTouchDevice) Modifier.clickable { onClick() } else Modifier
-            )
-            .onFocusChanged { isFocused = if (it.isFocused) 1 else 0 },
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = Color.White.copy(alpha = 0.1f)
-        ),
-        border = ClickableSurfaceDefaults.border(
-            border = androidx.tv.material3.Border(
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(4.dp)
-            ),
-            focusedBorder = androidx.tv.material3.Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, Color.White),
-                shape = RoundedCornerShape(4.dp)
-            )
-        )
-    ) {
-        Text(
-            text = if (isManageMode) stringResource(R.string.done) else stringResource(R.string.manage_profiles),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-        )
-    }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun CloudConnectButton(
-    onClick: () -> Unit
-) {
-    val isTouchDevice = LocalDeviceType.current.isTouchDevice()
-    var isFocused by remember { mutableIntStateOf(0) }
-
-    if (isTouchDevice) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFF6C63FF).copy(alpha = 0.25f),
-                            Color(0xFF00D4FF).copy(alpha = 0.18f)
-                        )
-                    )
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-                .clickable { onClick() }
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Cloud,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = stringResource(R.string.connect_to_cloud),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.85f)
-            )
-        }
-    } else {
-        Surface(
-            onClick = onClick,
-            modifier = Modifier.onFocusChanged { isFocused = if (it.isFocused) 1 else 0 },
-            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
-            colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color.White.copy(alpha = 0.06f),
-                focusedContainerColor = Color.White.copy(alpha = 0.18f)
-            ),
-            border = ClickableSurfaceDefaults.border(
-                border = androidx.tv.material3.Border(
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-                focusedBorder = androidx.tv.material3.Border(
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.6f)),
-                    shape = RoundedCornerShape(24.dp)
-                )
-            )
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Cloud,
-                    contentDescription = null,
-                    tint = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = stringResource(R.string.connect_to_cloud),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f)
-                )
-            }
-        }
     }
 }

@@ -62,8 +62,8 @@ class CrashReportActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("arvio_crash_store", Context.MODE_PRIVATE)
         val crashId = intent.getStringExtra(EXTRA_CRASH_ID) ?: prefs.getString("last_crash_id", "N/A") ?: "N/A"
-        // The reported message stays in English so the crash report sent to Discord/Sentry
-        // remains stable and searchable; only the on-screen fallback is localized.
+        // The reported message stays in English so the crash report remains stable and
+        // searchable; only the on-screen fallback is localized.
         val reportedCrashMsg = intent.getStringExtra(EXTRA_CRASH_MSG) ?: prefs.getString("last_crash_msg", null)
         val crashMsg = reportedCrashMsg ?: "Unexpected error"
         val crashTime = intent.getLongExtra(EXTRA_CRASH_TIME, prefs.getLong("last_crash_time", System.currentTimeMillis()))

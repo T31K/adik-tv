@@ -36,16 +36,12 @@ internal fun rankSearchResults(query: String, items: List<MediaItem>): List<Medi
     }
 }
 
-// Only explicit browse requests activate smart discovery, not titles such as
-// "Best in Show", "New Police Story" or "The New Adventures of Old Christine".
-internal fun isSmartDiscoveryQuery(query: String): Boolean = smartDiscovery.matches(query.trim()) ||
-    similarDiscovery.matches(query.trim())
-
-private val similarDiscovery = Regex("(?:movies?|shows?|series|films?)\\s+like\\s+.+", RegexOption.IGNORE_CASE)
-private val smartDiscovery = Regex(
-    "(?:top(?:\\s+\\d+)?(?:\\s+rated)?|best|popular|trending|new|latest)" +
-        "(?:\\s+(?:horror|comedy|action|drama|thriller|sci-fi|science fiction|romance|animation|" +
-        "documentary|crime|fantasy|adventure|mystery|war|western|family|history))?" +
-        "\\s+(?:movies?|tv shows?|shows|series|films?|anime)",
-    RegexOption.IGNORE_CASE
-)
+/** Local fallback match: every word of the query appears in the library title (accent/case-insensitive). */
+internal fun libraryTitleMatches(query: String, title: String): Boolean {
+    val queryWords = normalizeTitle(query).split(' ').filter { it.isNotEmpty() }
+    if (queryWords.isEmpty()) return false
+    val normalizedTitle = normalizeTitle(title)
+    val titleWords = normalizedTitle.split(' ')
+    return queryWords.all { word -> titleWords.any { it.startsWith(word) } } ||
+        normalizedTitle.contains(normalizeTitle(query))
+}

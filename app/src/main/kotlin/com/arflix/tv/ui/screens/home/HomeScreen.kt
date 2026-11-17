@@ -7,16 +7,13 @@ import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -25,16 +22,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.res.painterResource
 import com.arflix.tv.R
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,7 +61,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -130,17 +122,12 @@ import androidx.tv.material3.Text
 import coil.ImageLoader
 import coil.imageLoader
 import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.arflix.tv.data.model.Category
-import com.arflix.tv.data.model.CatalogConfig
-import com.arflix.tv.data.model.CollectionTileShape
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.isPortrait
-import com.arflix.tv.network.OkHttpProvider
-import com.arflix.tv.ui.components.FeaturedMediaCard
 import com.arflix.tv.ui.components.movieGenreNameRes
 import com.arflix.tv.ui.components.tvGenreNameRes
 import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
@@ -148,11 +135,9 @@ import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
 import com.arflix.tv.ui.components.AppTopBarHorizontalPadding
-import com.arflix.tv.data.model.SportsAddonCapabilities
 import com.arflix.tv.ui.components.SkeletonMobileHeroBanner
 import com.arflix.tv.ui.components.SkeletonPosterCard
 import com.arflix.tv.ui.components.SkeletonMediaCard
-import androidx.compose.material3.TextButton
 import com.arflix.tv.ui.components.MobileHeroBanner
 import com.arflix.tv.ui.components.ProfileAvatarVisual
 import com.arflix.tv.util.LocalDeviceType
@@ -173,11 +158,9 @@ import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.skin.rememberArvioCardShape
 import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundCard
 import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.ui.theme.AccentRed
 import com.arflix.tv.ui.theme.PrimeBlue
-import com.arflix.tv.ui.theme.PrimeGreen
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.ui.theme.BackgroundGradientCenter
@@ -185,24 +168,9 @@ import com.arflix.tv.ui.theme.BackgroundGradientEnd
 import com.arflix.tv.ui.theme.BackgroundGradientStart
 import com.arflix.tv.util.isInCinema
 import com.arflix.tv.util.parseRatingValue
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.C
-import androidx.media3.datasource.okhttp.OkHttpDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.withContext
-import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.abs
@@ -311,7 +279,7 @@ internal class HomeFocusState(
 
     companion object {
         // `userHasNavigated` is saved as the 4th element (0/1). Without it,
-        // returning from a Collection/Details screen caused the "preferred
+        // returning from a Details screen caused the "preferred
         // start row" reset to fire (since the field defaulted back to false),
         // which snapped the scroll position to Trending Movies — losing the
         // user's place in Franchises or wherever they were.
@@ -353,17 +321,8 @@ internal fun localizedCategoryTitle(category: Category): String = when (category
     "trending_series"          -> stringResource(R.string.trending_series)
     "trending_tv"              -> stringResource(R.string.trending_in_shows)
     "trending_anime"           -> stringResource(R.string.trending_anime)
-    "collection_row_service"   -> stringResource(R.string.services)
-    "collection_row_genre"     -> stringResource(R.string.genres)
-    "collection_row_decade"    -> stringResource(R.string.decades)
-    "collection_row_franchise" -> stringResource(R.string.franchises)
-    "collection_row_network"   -> stringResource(R.string.networks)
-    "collection_row_featured"  -> stringResource(R.string.featured)
     "top10_movies_today"       -> stringResource(R.string.home_top10_movies_today)
     "top10_shows_today"        -> stringResource(R.string.home_top10_shows_today)
-    "favorite_tv"              -> stringResource(R.string.home_favorite_tv)
-    "sports"                   -> stringResource(R.string.home_sports)
-    "popular_live_tv"          -> stringResource(R.string.home_popular_live_sports)
     "just_added"               -> stringResource(R.string.home_just_added)
     "top_movies_week"          -> stringResource(R.string.home_top_movies_week)
     "new_kdramas"              -> stringResource(R.string.home_new_kdramas)
@@ -468,24 +427,18 @@ private const val HOME_VIEW_ALL_FOCUS_KEY = "__view_all__"
 
 /**
  * Whether a home row ends with a "View all" card that opens its full paginated grid.
- * The grid only opens title details, so rows of IPTV channels, sports events or
- * collection tiles (which need their own routing) are excluded.
+ * ADIK: disabled — rows show no "View all" card. The rule is kept for when it returns.
  */
+@Suppress("UNUSED_PARAMETER", "SimplifyBooleanWithConstants")
 internal fun homeRowSupportsViewAll(category: Category, hasMore: Boolean): Boolean {
-    return false // ADIK: no "View all" card on rows.
-    @Suppress("UNREACHABLE_CODE")
-    if (category.id == "continue_watching" || category.id.startsWith("collection_row_")) return false
+    if (!HOME_VIEW_ALL_ENABLED) return false
+    if (category.id == "continue_watching") return false
     val realItems = category.items.filterNot { it.isPlaceholder }
     if (realItems.isEmpty()) return false
-    val hasNonTitleItems = realItems.any { item ->
-        val status = item.status
-        status?.startsWith("iptv:") == true ||
-            status?.startsWith("collection:") == true ||
-            SportsAddonCapabilities.isSportsHomeStatus(status)
-    }
-    if (hasNonTitleItems) return false
     return hasMore || realItems.size >= HOME_VIEW_ALL_MIN_ITEMS
 }
+
+private const val HOME_VIEW_ALL_ENABLED = false
 
 /** Index of a row's trailing "View all" slot (one past its last title), or -1 when it has none. */
 internal fun homeRowViewAllIndex(category: Category, hasMore: Boolean): Int =
@@ -501,61 +454,13 @@ private data class HomeFocusedHeroSnapshot(
 
 private fun preferredHomeStartRowIndex(categories: List<Category>): Int {
     val realContentIndex = categories.indexOfFirst { category ->
-        !category.id.startsWith("collection_row_") && category.items.any { !it.isPlaceholder }
+        category.items.any { !it.isPlaceholder }
     }
-    if (realContentIndex >= 0) return realContentIndex
-
-    val nonCollectionIndex = categories.indexOfFirst { !it.id.startsWith("collection_row_") }
-    if (nonCollectionIndex >= 0) return nonCollectionIndex
-
-    return 0
+    return realContentIndex.coerceAtLeast(0)
 }
 
 private fun isActionableHomeItem(item: MediaItem?): Boolean {
     return item != null && item.id > 0 && !item.isPlaceholder
-}
-
-@androidx.compose.runtime.Immutable
-private data class HomeHeroPlaybackHandles(
-    val player: ExoPlayer,
-    val hlsFactory: HlsMediaSource.Factory
-)
-
-private fun createHomeHeroPlaybackHandles(context: Context): HomeHeroPlaybackHandles {
-    val heroOkHttp = OkHttpClient.Builder()
-        .connectionPool(ConnectionPool(2, 2, TimeUnit.MINUTES))
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .retryOnConnectionFailure(true)
-        .dns(OkHttpProvider.dns)
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
-    val heroDataSourceFactory =
-        OkHttpDataSource.Factory(heroOkHttp).setUserAgent(OkHttpProvider.getAppUserAgent(context))
-    val heroHlsFactory = HlsMediaSource.Factory(heroDataSourceFactory)
-        .setAllowChunklessPreparation(true)
-    val heroDefaultFactory = DefaultMediaSourceFactory(context)
-        .setDataSourceFactory(heroDataSourceFactory)
-    val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(2_000, 8_000, 750, 1_500)
-        .setTargetBufferBytes(12 * 1024 * 1024)
-        .setPrioritizeTimeOverSizeThresholds(true)
-        .setBackBuffer(0, false)
-        .build()
-    val player = ExoPlayer.Builder(context)
-        .setMediaSourceFactory(heroDefaultFactory)
-        .setLoadControl(loadControl)
-        .build()
-        .apply {
-            playWhenReady = false
-            videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-            volume = 1f
-        }
-    return HomeHeroPlaybackHandles(
-        player = player,
-        hlsFactory = heroHlsFactory
-    )
 }
 
 private suspend fun androidx.compose.foundation.lazy.LazyListState.animateHomeScrollDelta(
@@ -702,12 +607,16 @@ fun HomeScreen(
     preloadedLogoCache: Map<String, String> = emptyMap(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
-    onNavigateToCollection: (String) -> Unit = {},
+    // ADIK: stub, removed with collections — never invoked; kept until AppNavigation stops passing it.
+    @Suppress("UNUSED_PARAMETER") onNavigateToCollection: (String) -> Unit = {},
     onNavigateToCategory: (String) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
-    onNavigateToWatchlist: () -> Unit = {},
-    onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
-    onNavigateToPlayer: (MediaType, Int, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    // ADIK: stub, removed with watchlist — never invoked; kept until AppNavigation stops passing it.
+    @Suppress("UNUSED_PARAMETER") onNavigateToWatchlist: () -> Unit = {},
+    // ADIK: stub, removed with live TV — never invoked; kept until AppNavigation stops passing it.
+    @Suppress("UNUSED_PARAMETER") onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
+    // ADIK: stub, removed with sports/stream playback — never invoked; kept until AppNavigation stops passing it.
+    @Suppress("UNUSED_PARAMETER") onNavigateToPlayer: (MediaType, Int, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onProfileSwitched: () -> Unit = {},
@@ -745,13 +654,12 @@ fun HomeScreen(
         }
     }
     // Lifecycle-aware: stops collecting when HomeScreen is off-screen so the
-    // ViewModel's TMDB/Trakt refresh pushes don't drive recompositions behind
+    // ViewModel's refresh pushes don't drive recompositions behind
     // an invisible UI.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Per-card logo reads now come from a stable snapshotStateMap so a single
     // logo arriving no longer recomposes the full home surface.
     val cardLogoUrls = viewModel.cardLogoUrls
-    val cardImdbRatings = viewModel.cardImdbRatings
     val profileCount = if (currentProfile != null) 1 else 0
     val usePosterCards = rememberCardLayoutMode() == CardLayoutMode.POSTER
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -782,18 +690,9 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                // Keep the profile-to-Home transition local-first. A forced remote
-                // refresh here cancelled the cache fast path on every app launch.
-                viewModel.refreshContinueWatchingOnly(force = false)
                 // Catalog rows: no-op unless they have gone stale (6h). Home now survives
                 // navigation, so nothing else would re-fetch them in a long session.
                 viewModel.refreshHomeDataIfStale()
-                // Pull the full cloud state (addons, catalogs, settings) on resume.
-                // This catches any changes pushed by another device while this one
-                // was backgrounded — the WebSocket may have been killed by Android,
-                // so we can't rely on realtime alone. Throttled internally to avoid
-                // redundant pulls on rapid activity transitions.
-                viewModel.pullCloudStateOnResume()
                 suppressSelectUntilMs = SystemClock.elapsedRealtime() + 150L
             }
         }
@@ -803,14 +702,10 @@ fun HomeScreen(
         }
     }
 
-    val rawDisplayCategoriesBase = if (uiState.categories.isNotEmpty()) {
+    val rawDisplayCategories = if (uiState.categories.isNotEmpty()) {
         uiState.categories
     } else {
         preloadedCategories
-    }
-    val sportsHomeRows by viewModel.sportsHomeRows.collectAsStateWithLifecycle()
-    val rawDisplayCategories = remember(rawDisplayCategoriesBase, sportsHomeRows) {
-        viewModel.withSportsHomeRows(rawDisplayCategoriesBase, sportsHomeRows)
     }
     val displayCategories = remember(rawDisplayCategories) {
         deduplicateHomeCategories(rawDisplayCategories)
@@ -829,14 +724,6 @@ fun HomeScreen(
     val latestDisplayCategories by rememberUpdatedState(displayCategories)
     val latestDisplayHeroItem by rememberUpdatedState(displayHeroItem)
 
-    val context = LocalContext.current
-    val openSportsHomeItem: (MediaItem) -> Unit = { item ->
-        viewModel.openSportsHomeItem(
-            item = item,
-            onNavigateToSettings = onNavigateToSettings,
-            onNavigateToPlayer = onNavigateToPlayer
-        )
-    }
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val backdropSize = remember(configuration, density) {
@@ -858,16 +745,8 @@ fun HomeScreen(
     // Use rememberSaveable to persist focus position across navigation (back from details page)
     val focusState = rememberSaveable(currentProfile?.id, saver = HomeFocusState.Saver) { HomeFocusState() }
     val fastScrollThresholdMs = 650L
-    // How long the D-pad must sit still before the hero starts a live IPTV preview.
-    // This gates only the IPTV branch of heroVideoUrl (collection MP4s skip it), so it is
-    // purely "how fast does hovering a Favorite TV card start playing". It was 6s, which
-    // read as the preview being broken rather than deliberate. 600ms still debounces
-    // scrubbing through a row — no stream is opened while the selector is actually moving —
-    // but starts as soon as the user settles on a card.
-    val heroVideoIdleThresholdMs = 600L
     val startupEffectsDelayMs = if (isMobile) 0L else 900L
     var startupEffectsSettled by remember { mutableStateOf(isMobile) }
-    var suppressHeroVideoPlayback by remember { mutableStateOf(false) }
 
     LaunchedEffect(isMobile) {
         if (isMobile) {
@@ -882,35 +761,10 @@ fun HomeScreen(
     val showCinematicHomeLayer = isMobile || allowHomeBackgroundWork
     val limitRowsDuringStartup = !isMobile && !allowHomeBackgroundWork && !focusState.userHasNavigated
 
-    LaunchedEffect(isMobile, focusState) {
-        if (isMobile) {
-            suppressHeroVideoPlayback = false
-            return@LaunchedEffect
-        }
-        snapshotFlow { focusState.lastNavEventTime to focusState.isSidebarFocused }
-            .distinctUntilChanged()
-            .collectLatest { (anchor, sidebarFocused) ->
-                if (sidebarFocused) {
-                    suppressHeroVideoPlayback = true
-                    return@collectLatest
-                }
-                if (anchor <= 0L) {
-                    suppressHeroVideoPlayback = false
-                    return@collectLatest
-                }
-                suppressHeroVideoPlayback = true
-                delay(heroVideoIdleThresholdMs)
-                if (focusState.lastNavEventTime == anchor && !focusState.isSidebarFocused) {
-                    suppressHeroVideoPlayback = false
-                }
-            }
-    }
-
     // Context menu state (Menu button only, no long-press)
     var showContextMenu by remember { mutableStateOf(false) }
     var contextMenuItem by remember { mutableStateOf<MediaItem?>(null) }
     var contextMenuIsContinueWatching by remember { mutableStateOf(false) }
-    var contextMenuIsInWatchlist by remember { mutableStateOf(false) }
 
     BackHandler(enabled = showContextMenu) {
         showContextMenu = false
@@ -1023,140 +877,12 @@ fun HomeScreen(
             }
     }
 
-    LaunchedEffect(showContextMenu, contextMenuItem) {
-        if (showContextMenu) {
-            val item = contextMenuItem
-            contextMenuIsInWatchlist = if (item != null) {
-                viewModel.isInWatchlist(item)
-            } else {
-                false
-            }
-        } else {
-            contextMenuIsInWatchlist = false
-        }
-    }
-
-    // ── IPTV + service-collection hero player state ──
-    val isHeroIptv = displayHeroItem != null && viewModel.isIptvItem(displayHeroItem)
-    val isHeroCollection = displayHeroItem != null && viewModel.isCollectionItem(displayHeroItem)
-    // Track service-collection "played once" — after the video ends we stop
-    // re-spawning the player until the user focuses a *different* service.
-    // Keyed on the focused collection id so re-entering the card after
-    // moving elsewhere replays it.
-    var collectionVideoFinishedId by remember { mutableStateOf<Int?>(null) }
-    val heroVideoAllowed = true
-    val serviceHeroVideoUrl = displayHeroItem
-        ?.takeIf { heroVideoAllowed && isHeroCollection && collectionVideoFinishedId != it.id }
-        ?.let { viewModel.getCollectionHeroVideoUrl(it) }
-    val heroVideoUrl = when {
-        !isMobile && !focusState.userHasNavigated -> null
-        !heroVideoAllowed -> null
-        // Service collection MP4s should start as soon as the card becomes the hero.
-        // Keep the idle gate for heavier IPTV/live playback, but do not delay MP4 previews.
-        serviceHeroVideoUrl != null -> serviceHeroVideoUrl
-        suppressHeroVideoPlayback -> null
-        isHeroIptv -> displayHeroItem?.let { viewModel.getIptvStreamUrl(it.id) }
-        else -> null
-    }
-
-    var isTrailerPlaying by remember { mutableStateOf(false) }
-    var trailerSuppressed by remember { mutableStateOf(false) }
-    LaunchedEffect(displayHeroItem?.id) { trailerSuppressed = false }
-    val heroRowIsContinueWatching = latestDisplayCategories
-        .getOrNull(focusState.currentRowIndex)?.id == "continue_watching"
-    val trailerOverlayAlpha = remember { Animatable(1f) }
-    LaunchedEffect(isTrailerPlaying) {
-        if (isTrailerPlaying) {
-            trailerOverlayAlpha.animateTo(0f, tween(1500, easing = FastOutSlowInEasing))
-        } else {
-            trailerOverlayAlpha.animateTo(1f, tween(500, easing = FastOutSlowInEasing))
-        }
-    }
-
-    var heroPlaybackHandles by remember { mutableStateOf<HomeHeroPlaybackHandles?>(null) }
-    var preparedHeroVideoUrl by remember { mutableStateOf<String?>(null) }
-    val heroExoPlayer = heroPlaybackHandles?.player
-    DisposableEffect(Unit) {
-        onDispose {
-            heroPlaybackHandles?.player?.release()
-            heroPlaybackHandles = null
-            preparedHeroVideoUrl = null
-        }
-    }
-
-    // Service-collection video lifecycle: play once on focus, with sound,
-    // then mark the card "played" so subsequent focus returns fall back to
-    // the stock image. IPTV live streams bypass this (they loop naturally).
-    val heroVideoFadeDurationMs = if (isMobile) 420 else 0
-    val focusedCollectionId = displayHeroItem?.id?.takeIf { isHeroCollection }
-    val latestFocusedCollectionId by rememberUpdatedState(focusedCollectionId)
-    val heroVideoAlpha by animateFloatAsState(
-        targetValue = if (heroVideoUrl != null) 1f else 0f,
-        animationSpec = tween(durationMillis = heroVideoFadeDurationMs),
-        label = "home-hero-video-alpha"
-    )
-    DisposableEffect(heroExoPlayer) {
-        val player = heroExoPlayer ?: return@DisposableEffect onDispose { }
-        val listener = object : androidx.media3.common.Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                    latestFocusedCollectionId?.let { collectionVideoFinishedId = it }
-                }
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
-
-    LaunchedEffect(heroVideoUrl) {
-        if (heroVideoUrl != null && heroPlaybackHandles == null) {
-            heroPlaybackHandles = createHomeHeroPlaybackHandles(context)
-        }
-        val player = heroPlaybackHandles?.player
-        if (heroVideoUrl != null) {
-            val handles = heroPlaybackHandles ?: return@LaunchedEffect
-            if (preparedHeroVideoUrl != heroVideoUrl) {
-                player?.stop()
-                player?.clearMediaItems()
-                val mi = androidx.media3.common.MediaItem.Builder()
-                    .setUri(heroVideoUrl)
-                    .setLiveConfiguration(
-                        androidx.media3.common.MediaItem.LiveConfiguration.Builder()
-                            .setMinPlaybackSpeed(1.0f).setMaxPlaybackSpeed(1.0f)
-                            .setTargetOffsetMs(4_000).build()
-                    ).build()
-                val lower = heroVideoUrl.lowercase()
-                if (lower.contains(".m3u8") || lower.contains("/hls") || lower.contains("format=hls")) {
-                    player?.setMediaSource(handles.hlsFactory.createMediaSource(mi))
-                } else {
-                    player?.setMediaItem(mi)
-                }
-                player?.prepare()
-                preparedHeroVideoUrl = heroVideoUrl
-            }
-            // Service videos play once with sound and stop; IPTV live streams
-            // naturally don't loop (they're live) so REPEAT_MODE_OFF is safe
-            // for both paths.
-            player?.repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
-            player?.volume = 1f
-            player?.playWhenReady = true
-        } else {
-            player?.playWhenReady = false
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(appBackgroundDark())
       ) {
-        val currentBackdrop = displayHeroItem?.let { item ->
-            if (viewModel.isCollectionItem(item)) {
-                viewModel.getCollectionHeroImageUrl(item) ?: item.image
-            } else {
-                item.backdrop ?: item.image
-            }
-        }
+        val currentBackdrop = displayHeroItem?.let { item -> item.backdrop ?: item.image }
         var settledBackdrop by remember { mutableStateOf<String?>(null) }
         val latestCurrentBackdrop by rememberUpdatedState(currentBackdrop)
         LaunchedEffect(currentBackdrop, isMobile) {
@@ -1185,12 +911,8 @@ fun HomeScreen(
             val backdropModifier = Modifier.fillMaxSize()
             Box(modifier = backdropModifier.graphicsLayer {
                 // Cache the unchanged backdrop and scrims as one full-resolution layer
-                // while the rails move. Video surfaces must remain independently composited.
-                compositingStrategy = if (heroExoPlayer == null) {
-                    androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-                } else {
-                    androidx.compose.ui.graphics.CompositingStrategy.Auto
-                }
+                // while the rails move.
+                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
             }) {
                 if (!showCinematicHomeLayer || settledBackdrop == null) {
                     Box(
@@ -1209,35 +931,6 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-
-                if (heroExoPlayer != null && (heroVideoUrl != null || heroVideoAlpha > 0.01f)) {
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                useController = false
-                                setControllerAutoShow(false)
-                                hideController()
-                                isFocusable = false
-                                isFocusableInTouchMode = false
-                                descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                setKeepContentOnPlayerReset(true)
-                                player = heroExoPlayer
-                            }
-                        },
-                        update = { pv ->
-                            pv.useController = false
-                            pv.setControllerAutoShow(false)
-                            pv.hideController()
-                            pv.player = heroExoPlayer
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = heroVideoAlpha }
-                    )
-                }
-
 
                 // === SCRIM SYSTEM ===
                 Box(
@@ -1301,12 +994,9 @@ fun HomeScreen(
             }
         } // end if (!isMobile) backdrop
 
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = trailerOverlayAlpha.value }) {
         HomeInputLayer(
             categories = displayCategories,
             cardLogoUrls = cardLogoUrls,
-            cardImdbRatings = cardImdbRatings,
-            onPreloadHeroImdbRatings = viewModel::preloadImdbRatingsForHeroItems,
             focusState = focusState,
             limitRowsDuringStartup = limitRowsDuringStartup,
             suppressSelectUntilMs = suppressSelectUntilMs,
@@ -1314,59 +1004,32 @@ fun HomeScreen(
             fastScrollThresholdMs = fastScrollThresholdMs,
             usePosterCards = usePosterCards,
             isContextMenuOpen = showContextMenu,
-            trailerIsPlaying = isTrailerPlaying,
-            onTrailerStop = { trailerSuppressed = true },
             isMobile = isMobile,
             heroItem = displayHeroItem,
             heroOverviewOverride = displayHeroOverview,
             onPlay = {
                 displayHeroItem?.let { item ->
-                    if (viewModel.isSportsHomeItem(item)) {
-                        openSportsHomeItem(item)
-                    } else if (viewModel.isIptvItem(item)) {
-                        onNavigateToTv(viewModel.getIptvChannelId(item), null)
-                    } else if (viewModel.isCollectionItem(item)) {
-                        onNavigateToCollection(item.status?.removePrefix("collection:").orEmpty())
-                    } else {
-                        navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
-                    }
+                    navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
                 }
             },
             onDetails = {
                 displayHeroItem?.let { item ->
-                    if (viewModel.isSportsHomeItem(item)) {
-                        openSportsHomeItem(item)
-                    } else if (viewModel.isIptvItem(item)) {
-                        onNavigateToTv(viewModel.getIptvChannelId(item), null)
-                    } else if (viewModel.isCollectionItem(item)) {
-                        onNavigateToCollection(item.status?.removePrefix("collection:").orEmpty())
-                    } else {
-                        navigateToDetailsWithCache(item.mediaType, item.id, null, null)
-                    }
+                    navigateToDetailsWithCache(item.mediaType, item.id, null, null)
                 }
             },
             currentProfile = currentProfile,
             profileCount = profileCount,
             clockFormat = uiState.clockFormat,
-            syncStatus = uiState.syncStatus,
             hasUpdateBadge = uiState.hasUpdateBadge,
             categoryHasMoreMap = uiState.categoryHasMoreMap,
             smoothScrolling = uiState.smoothScrolling,
-            isSlowLoading = uiState.isMobileSlowLoading,
-            onRetry = { viewModel.retryMobileHomeLoading() },
             onLoadMoreCategory = { viewModel.loadNextHomeRowPage(it) },
-            onItemFocusedPrefetch = {},
             onMobileCategoryVisiblePosition = { categoryId, lastVisibleItemIndex ->
                 viewModel.onMobileCategoryVisiblePosition(categoryId, lastVisibleItemIndex)
             },
             onNavigateToDetails = navigateToDetailsWithCache,
-            onNavigateToCollection = onNavigateToCollection,
             onNavigateToCategory = onNavigateToCategory,
             onNavigateToSearch = onNavigateToSearch,
-            onNavigateToWatchlist = onNavigateToWatchlist,
-            onNavigateToTv = onNavigateToTv,
-            isSportsHomeItem = { item -> viewModel.isSportsHomeItem(item) },
-            onSportsHomeItemClick = openSportsHomeItem,
             onNavigateToSettings = onNavigateToSettings,
             onSwitchProfile = onSwitchProfile,
             profiles = profileSwitchState.profiles,
@@ -1379,32 +1042,22 @@ fun HomeScreen(
             onShowProfileMenuChange = { showProfileMenu = it },
             onProfileMenuIndexChange = { profileMenuIndex = it },
             onExitApp = onExitApp,
-            featuredTrailerKey = null,
-            featuredTrailerDelayMs = uiState.trailerDelaySeconds * 1000L,
-            featuredTrailerVolume = if (uiState.trailerSoundEnabled) 1f else 0f,
             onOpenContextMenu = { item, isContinue ->
                 contextMenuItem = item
                 contextMenuIsContinueWatching = isContinue
                 showContextMenu = true
             }
         )
-        } // end trailer-dim wrapper
 
         if (showCinematicHomeLayer) {
-            Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = trailerOverlayAlpha.value }) {
             HomeHeroLayer(
                 heroItem = displayHeroItem,
                 heroLogoUrl = displayHeroLogo,
                 heroOverviewOverride = displayHeroOverview,
                 contentStartPadding = contentStartPadding,
                 isMobile = isMobile,
-                showBudget = uiState.showBudget,
-                onNavigateToDetails = navigateToDetailsWithCache,
-                onNavigateToTv = { channelId, streamUrl -> onNavigateToTv(channelId, streamUrl) },
-                isIptvItem = { item -> viewModel.isIptvItem(item) },
-                getIptvChannelId = { item -> viewModel.getIptvChannelId(item) }
+                showBudget = uiState.showBudget
             )
-            } // end trailer-dim wrapper
         }
 
         // Error state - show message when loading failed and no content
@@ -1470,29 +1123,13 @@ fun HomeScreen(
                 MediaContextMenu(
                     isVisible = showContextMenu,
                     title = item.title,
-                    isInWatchlist = contextMenuIsInWatchlist,
                     isWatched = item.isWatched,
                     isContinueWatching = contextMenuIsContinueWatching,
                     onPlay = {
-                        if (viewModel.isSportsHomeItem(item)) {
-                            openSportsHomeItem(item)
-                        } else if (viewModel.isIptvItem(item)) {
-                            onNavigateToTv(viewModel.getIptvChannelId(item), null)
-                        } else {
-                            navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
-                        }
+                        navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
                     },
                     onViewDetails = {
-                        if (viewModel.isSportsHomeItem(item)) {
-                            openSportsHomeItem(item)
-                        } else if (viewModel.isIptvItem(item)) {
-                            onNavigateToTv(viewModel.getIptvChannelId(item), null)
-                        } else {
-                            navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
-                        }
-                    },
-                    onToggleWatchlist = {
-                        viewModel.toggleWatchlist(item)
+                        navigateToDetailsWithCache(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
                     },
                     onToggleWatched = {
                         viewModel.toggleWatched(item)
@@ -1664,41 +1301,7 @@ private fun HeroSection(
         // Performance: Use key instead of AnimatedContent for faster transitions
         key(item.id) {
             val currentItem = item
-            val isIptvHero = currentItem.status?.startsWith("iptv:") == true
             Column {
-                if (isIptvHero) {
-                    // IPTV hero: LIVE badge + channel group
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(AccentRed, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.live).uppercase(),
-                                style = ArflixTypography.caption.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black
-                                ),
-                                color = Color.White
-                            )
-                        }
-                        if (currentItem.subtitle.isNotBlank()) {
-                            Text(
-                                text = currentItem.subtitle,
-                                style = ArflixTypography.caption.copy(
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    shadow = textShadow
-                                ),
-                                color = Color.White
-                            )
-                        }
-                    }
-                } else {
                     // Get actual genre names from genre IDs (memoized to avoid list allocations per recomposition)
                     val genreText = remember(currentItem.id, currentItem.genreIds, context) {
                         context.genreNames(currentItem.mediaType, currentItem.genreIds).take(2).joinToString(" / ")
@@ -1871,11 +1474,10 @@ private fun HeroSection(
                             }
                         }
                     }
-                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Overview text (EPG data for IPTV, synopsis for movies/shows)
+                // Overview text (synopsis for movies/shows)
                 val displayOverview = remember(overviewOverride, currentItem.overview, context) {
                     context.cleanOverviewText(overviewOverride ?: currentItem.overview)
                 }
@@ -1972,10 +1574,6 @@ private fun HomeHeroLayer(
     contentStartPadding: androidx.compose.ui.unit.Dp,
     isMobile: Boolean = false,
     showBudget: Boolean = true,
-    onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
-    onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
-    isIptvItem: (MediaItem) -> Boolean = { false },
-    getIptvChannelId: (MediaItem) -> String? = { null }
 ) {
     if (isMobile) {
         // Mobile hero is rendered inline inside MobileHomeRowsLayer's LazyColumn — no fixed overlay needed.
@@ -1991,21 +1589,19 @@ private fun HomeHeroLayer(
                 .zIndex(3f)
         ) {
             heroItem?.let { item ->
-                if (!item.status.orEmpty().startsWith("collection:")) {
-                    HeroSection(
-                        item = item,
-                        logoUrl = heroLogoUrl,
-                        overviewOverride = heroOverviewOverride,
-                        showBudget = showBudget,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(
-                                top = heroTopPadding,
-                                start = contentStartPadding,
-                                end = 400.dp
-                            )
-                    )
-                }
+                HeroSection(
+                    item = item,
+                    logoUrl = heroLogoUrl,
+                    overviewOverride = heroOverviewOverride,
+                    showBudget = showBudget,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(
+                            top = heroTopPadding,
+                            start = contentStartPadding,
+                            end = 400.dp
+                        )
+                )
             }
         }
     }
@@ -2226,26 +1822,19 @@ private fun MobileHeroOverlay(
 private fun MobileHeroCarousel(
     categories: List<Category>,
     cardLogoUrls: Map<String, String> = emptyMap(),
-    cardImdbRatings: Map<String, String> = emptyMap(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToSearch: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
-    onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit,
-    onPreloadHeroImdbRatings: (List<MediaItem>) -> Unit = {}
+    onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit
 ) {
     val context = LocalContext.current
     val heroItems = remember(categories) {
-        val eligibleRows = categories.filter {
-            it.id != "continue_watching" &&
-                !it.id.startsWith("collection_row_") &&
-                it.id != SportsAddonCapabilities.SPORTS_CATEGORY_ROW_ID &&
-                it.id != SportsAddonCapabilities.POPULAR_LIVE_TV_ROW_ID
-        }
+        val eligibleRows = categories.filter { it.id != "continue_watching" }
         val firstCat = eligibleRows.getOrNull(0)
-            ?.items?.filter { !it.isPlaceholder && it.id > 0 && !SportsAddonCapabilities.isSportsHomeStatus(it.status) && !SportsAddonCapabilities.isSportsLockedStatus(it.status) }?.take(5)
+            ?.items?.filter { !it.isPlaceholder && it.id > 0 }?.take(5)
             .orEmpty()
         val secondCat = eligibleRows.getOrNull(1)
-            ?.items?.filter { !it.isPlaceholder && it.id > 0 && !SportsAddonCapabilities.isSportsHomeStatus(it.status) && !SportsAddonCapabilities.isSportsLockedStatus(it.status) }?.take(5)
+            ?.items?.filter { !it.isPlaceholder && it.id > 0 }?.take(5)
             .orEmpty()
         // Interleave: first[0], second[0], first[1], second[1], …
         buildList {
@@ -2255,12 +1844,6 @@ private fun MobileHeroCarousel(
                 if (i < secondCat.size) add(secondCat[i])
             }
         }.distinctBy { "${it.mediaType}_${it.id}" }
-    }
-
-    LaunchedEffect(heroItems) {
-        if (heroItems.isNotEmpty()) {
-            onPreloadHeroImdbRatings(heroItems)
-        }
     }
 
     if (heroItems.isEmpty()) {
@@ -2392,13 +1975,8 @@ private fun MobileHeroCarousel(
                     item.year
                 }
             }
-            val dynamicImdb = cardImdbRatings["${item.mediaType}_${item.id}"]
-            val rating = remember(item.id, dynamicImdb, item.imdbRating, item.tmdbRating, item.rating) {
-                if (!dynamicImdb.isNullOrBlank() && parseRatingValue(dynamicImdb) > 0f) {
-                    dynamicImdb
-                } else {
-                    imdbRatingFor(item)
-                }
+            val rating = remember(item.id, item.imdbRating, item.tmdbRating, item.rating) {
+                imdbRatingFor(item)
             }
             val logoUrl = remember(item.id) { cardLogoUrls["${item.mediaType}_${item.id}"] }
 
@@ -2464,8 +2042,6 @@ private fun MobileHeroCarousel(
 internal fun HomeInputLayer(
     categories: List<Category>,
     cardLogoUrls: Map<String, String>,
-    cardImdbRatings: Map<String, String> = emptyMap(),
-    onPreloadHeroImdbRatings: (List<MediaItem>) -> Unit = {},
     focusState: HomeFocusState,
     limitRowsDuringStartup: Boolean,
     suppressSelectUntilMs: Long,
@@ -2473,8 +2049,6 @@ internal fun HomeInputLayer(
     fastScrollThresholdMs: Long,
     usePosterCards: Boolean,
     isContextMenuOpen: Boolean,
-    trailerIsPlaying: Boolean = false,
-    onTrailerStop: () -> Unit = {},
     isMobile: Boolean = false,
     heroItem: MediaItem? = null,
     heroOverviewOverride: String? = null,
@@ -2483,23 +2057,14 @@ internal fun HomeInputLayer(
     currentProfile: com.arflix.tv.data.model.Profile?,
     profileCount: Int = 1,
     clockFormat: String = "24h",
-    syncStatus: com.arflix.tv.data.repository.CloudSyncStatus = com.arflix.tv.data.repository.CloudSyncStatus.NOT_SIGNED_IN,
     hasUpdateBadge: Boolean = false,
     categoryHasMoreMap: Map<String, Boolean> = emptyMap(),
     smoothScrolling: Boolean = true,
-    isSlowLoading: Boolean = false,
-    onRetry: () -> Unit = {},
     onLoadMoreCategory: (String) -> Unit = {},
-    onItemFocusedPrefetch: (MediaItem) -> Unit = {},
     onMobileCategoryVisiblePosition: (String, Int) -> Unit = { _, _ -> },
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit,
-    onNavigateToCollection: (String) -> Unit,
     onNavigateToCategory: (String) -> Unit = {},
     onNavigateToSearch: () -> Unit,
-    onNavigateToWatchlist: () -> Unit,
-    onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit,
-    isSportsHomeItem: (MediaItem) -> Boolean = { false },
-    onSportsHomeItemClick: (MediaItem) -> Unit = {},
     onNavigateToSettings: () -> Unit,
     onSwitchProfile: () -> Unit,
     profiles: List<com.arflix.tv.data.model.Profile> = emptyList(),
@@ -2509,9 +2074,6 @@ internal fun HomeInputLayer(
     onShowProfileMenuChange: (Boolean) -> Unit = {},
     onProfileMenuIndexChange: (Int) -> Unit = {},
     onExitApp: () -> Unit,
-    featuredTrailerKey: String? = null,
-    featuredTrailerDelayMs: Long = 0L,
-    featuredTrailerVolume: Float = 0f,
     onOpenContextMenu: (MediaItem, Boolean) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -2613,12 +2175,6 @@ internal fun HomeInputLayer(
                 }
                 return@onPreviewKeyEvent true
             }
-            if (trailerIsPlaying && event.type == KeyEventType.KeyDown &&
-                (isArvioDpadNavigationKey(event.key) || event.key == Key.Enter || event.key == Key.DirectionCenter || event.key == Key.Back)
-            ) {
-                onTrailerStop()
-                return@onPreviewKeyEvent true
-            }
             if (event.type == KeyEventType.KeyUp && isArvioDpadNavigationKey(event.key)) {
                 dpadRepeatGate.reset()
             }
@@ -2705,11 +2261,8 @@ internal fun HomeInputLayer(
                             } else {
                                 when (topBarFocusedItem(focusState.sidebarFocusIndex, hasProfile)) {
                                     SidebarItem.SEARCH -> onNavigateToSearch()
-                                    SidebarItem.HOME -> Unit
-                                    SidebarItem.WATCHLIST -> onNavigateToWatchlist()
-                                    SidebarItem.TV -> onNavigateToTv(null, null)
                                     SidebarItem.SETTINGS -> onNavigateToSettings()
-                                    null -> Unit
+                                    else -> Unit
                                 }
                             }
                         } else {
@@ -2821,13 +2374,9 @@ internal fun HomeInputLayer(
                                     focusState.currentItemIndex
                                 )
                                 currentItem?.takeIf { isActionableHomeItem(it) }?.let { item ->
-                                    if (isSportsHomeItem(item)) {
-                                        onSportsHomeItemClick(item)
-                                    } else {
-                                        val currentCategory = categories.getOrNull(focusState.currentRowIndex)
-                                        val isContinue = currentCategory?.id == "continue_watching"
-                                        onOpenContextMenu(item, isContinue)
-                                    }
+                                    val currentCategory = categories.getOrNull(focusState.currentRowIndex)
+                                    val isContinue = currentCategory?.id == "continue_watching"
+                                    onOpenContextMenu(item, isContinue)
                                 }
                             }
                             true
@@ -2846,32 +2395,14 @@ internal fun HomeInputLayer(
                                     focusState.currentItemIndex
                                 )
                                 currentItem?.takeIf { isActionableHomeItem(it) }?.let { item ->
-                                    if (isSportsHomeItem(item)) {
-                                        onSportsHomeItemClick(item)
-                                        return@let
-                                    }
                                     if (holdMs >= 500L) {
                                         // Long-press: open context menu
                                         val currentCategory = categories.getOrNull(focusState.currentRowIndex)
                                         val isContinue = currentCategory?.id == "continue_watching"
                                         onOpenContextMenu(item, isContinue)
                                     } else {
-                                        // Short press: navigate. Must check collection:
-                                        // BEFORE falling through to Details — D-pad SELECT
-                                        // on a service tile (Netflix, HBO, ...) was hitting
-                                        // DetailsScreen with the synthetic hash id and
-                                        // spamming TMDB 404s instead of opening the catalog.
-                                        val iptvId = item.status?.removePrefix("iptv:")
-                                            ?.takeIf { item.status?.startsWith("iptv:") == true && it.isNotBlank() }
-                                        val collectionId = item.status?.removePrefix("collection:")
-                                            ?.takeIf { item.status?.startsWith("collection:") == true && it.isNotBlank() }
-                                        if (iptvId != null) {
-                                            onNavigateToTv(iptvId, null)
-                                        } else if (collectionId != null) {
-                                            onNavigateToCollection(collectionId)
-                                        } else {
-                                            onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
-                                        }
+                                        // Short press: open details.
+                                        onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
                                     }
                                 }
                             }
@@ -2919,8 +2450,6 @@ internal fun HomeInputLayer(
         HomeRowsLayer(
             categories = categories,
             cardLogoUrls = cardLogoUrls,
-            cardImdbRatings = cardImdbRatings,
-            onPreloadHeroImdbRatings = onPreloadHeroImdbRatings,
             focusState = focusState,
             limitRowsDuringStartup = limitRowsDuringStartup,
             contentStartPadding = contentStartPadding,
@@ -2929,10 +2458,7 @@ internal fun HomeInputLayer(
             isMobile = isMobile,
             categoryHasMoreMap = categoryHasMoreMap,
             smoothScrolling = smoothScrolling,
-            isSlowLoading = isSlowLoading,
-            onRetry = onRetry,
             onLoadMoreCategory = onLoadMoreCategory,
-            onItemFocusedPrefetch = onItemFocusedPrefetch,
             heroItem = heroItem,
             heroOverviewOverride = heroOverviewOverride,
             onPlay = onPlay,
@@ -2943,39 +2469,14 @@ internal fun HomeInputLayer(
             onNavigateToDetails = onNavigateToDetails,
             onMobileCategoryVisiblePosition = onMobileCategoryVisiblePosition,
             onViewAllCategory = onNavigateToCategory,
-            featuredTrailerKey = featuredTrailerKey,
-            featuredTrailerDelayMs = featuredTrailerDelayMs,
-            featuredTrailerVolume = featuredTrailerVolume,
             onItemClick = { item ->
                 if (!isActionableHomeItem(item)) {
                     return@HomeRowsLayer
                 }
-                if (isSportsHomeItem(item)) {
-                    onSportsHomeItemClick(item)
-                    return@HomeRowsLayer
-                }
-                val iptvId = item.status?.removePrefix("iptv:")?.takeIf { item.status?.startsWith("iptv:") == true && it.isNotBlank() }
-                val collectionId = item.status?.removePrefix("collection:")?.takeIf { item.status?.startsWith("collection:") == true && it.isNotBlank() }
-                if (iptvId != null) {
-                    // Deliberately no stream URL: the cached channel's raw streamUrl is
-                    // not playable for Xtream/Stalker sources until IptvRepository
-                    // resolves it. Passing it made Live TV skip resolution and play the
-                    // wrong source. The id alone lets Live TV resolve it properly.
-                    onNavigateToTv(iptvId, null)
-                } else if (collectionId != null) {
-                    onNavigateToCollection(collectionId)
-                } else {
-                    onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
-                }
+                onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
             },
             onItemLongClick = if (isMobile) {
-                { item, isContinue ->
-                    if (isSportsHomeItem(item)) {
-                        onSportsHomeItemClick(item)
-                    } else {
-                        onOpenContextMenu(item, isContinue)
-                    }
-                }
+                { item, isContinue -> onOpenContextMenu(item, isContinue) }
             } else null
         )
     }
@@ -2985,8 +2486,6 @@ internal fun HomeInputLayer(
 private fun HomeRowsLayer(
     categories: List<Category>,
     cardLogoUrls: Map<String, String>,
-    cardImdbRatings: Map<String, String> = emptyMap(),
-    onPreloadHeroImdbRatings: (List<MediaItem>) -> Unit = {},
     focusState: HomeFocusState,
     limitRowsDuringStartup: Boolean,
     contentStartPadding: androidx.compose.ui.unit.Dp,
@@ -2995,10 +2494,7 @@ private fun HomeRowsLayer(
     isMobile: Boolean = false,
     categoryHasMoreMap: Map<String, Boolean> = emptyMap(),
     smoothScrolling: Boolean = true,
-    isSlowLoading: Boolean = false,
-    onRetry: () -> Unit = {},
     onLoadMoreCategory: (String) -> Unit = {},
-    onItemFocusedPrefetch: (MediaItem) -> Unit = {},
     heroItem: MediaItem? = null,
     heroOverviewOverride: String? = null,
     onPlay: () -> Unit = {},
@@ -3009,9 +2505,6 @@ private fun HomeRowsLayer(
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
     onMobileCategoryVisiblePosition: (String, Int) -> Unit = { _, _ -> },
     onViewAllCategory: (String) -> Unit = {},
-    featuredTrailerKey: String? = null,
-    featuredTrailerDelayMs: Long = 0L,
-    featuredTrailerVolume: Float = 0f,
     onItemClick: (MediaItem) -> Unit,
     onItemLongClick: ((MediaItem, Boolean) -> Unit)? = null
 ) {
@@ -3019,30 +2512,17 @@ private fun HomeRowsLayer(
         MobileHomeRowsLayer(
             categories = categories,
             cardLogoUrls = cardLogoUrls,
-            cardImdbRatings = cardImdbRatings,
-            onPreloadHeroImdbRatings = onPreloadHeroImdbRatings,
             contentStartPadding = contentStartPadding,
             currentProfile = currentProfile,
             onNavigateToSearch = onNavigateToSearch,
             onSwitchProfile = onSwitchProfile,
             usePosterCards = usePosterCards,
             categoryHasMoreMap = categoryHasMoreMap,
-            isSlowLoading = isSlowLoading,
-            onRetry = onRetry,
-            onLoadMoreCategory = onLoadMoreCategory,
             onNavigateToDetails = onNavigateToDetails,
             onItemClick = onItemClick,
             onItemLongClick = onItemLongClick,
             onViewAllCategory = onViewAllCategory,
-            onCategoryVisiblePosition = { categoryId, lastVisibleItemIndex ->
-                onMobileCategoryVisiblePosition(categoryId, lastVisibleItemIndex)
-                val rowIndex = categories.indexOfFirst { it.id == categoryId }
-                val visibleItem = categories
-                    .getOrNull(rowIndex)
-                    ?.items
-                    ?.getOrNull(lastVisibleItemIndex)
-                if (visibleItem != null) onItemFocusedPrefetch(visibleItem)
-            }
+            onCategoryVisiblePosition = onMobileCategoryVisiblePosition
         )
     } else {
         TvHomeRowsLayer(
@@ -3056,10 +2536,6 @@ private fun HomeRowsLayer(
             categoryHasMoreMap = categoryHasMoreMap,
             smoothScrolling = smoothScrolling,
             onLoadMoreCategory = onLoadMoreCategory,
-            onItemFocusedPrefetch = onItemFocusedPrefetch,
-            featuredTrailerKey = featuredTrailerKey,
-            featuredTrailerDelayMs = featuredTrailerDelayMs,
-            featuredTrailerVolume = featuredTrailerVolume,
             onViewAllCategory = onViewAllCategory,
             onItemClick = onItemClick
         )
@@ -3071,17 +2547,12 @@ private fun HomeRowsLayer(
 private fun MobileHomeRowsLayer(
     categories: List<Category>,
     cardLogoUrls: Map<String, String>,
-    cardImdbRatings: Map<String, String> = emptyMap(),
-    onPreloadHeroImdbRatings: (List<MediaItem>) -> Unit = {},
     contentStartPadding: androidx.compose.ui.unit.Dp,
     usePosterCards: Boolean,
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToSearch: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     categoryHasMoreMap: Map<String, Boolean> = emptyMap(),
-    isSlowLoading: Boolean = false,
-    onRetry: () -> Unit = {},
-    onLoadMoreCategory: (String) -> Unit = {},
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
     onItemClick: (MediaItem) -> Unit,
     onItemLongClick: ((MediaItem, Boolean) -> Unit)? = null,
@@ -3100,12 +2571,10 @@ private fun MobileHomeRowsLayer(
             MobileHeroCarousel(
                 categories = categories,
                 cardLogoUrls = cardLogoUrls,
-                cardImdbRatings = cardImdbRatings,
                 currentProfile = currentProfile,
                 onNavigateToSearch = onNavigateToSearch,
                 onSwitchProfile = onSwitchProfile,
-                onNavigateToDetails = onNavigateToDetails,
-                onPreloadHeroImdbRatings = onPreloadHeroImdbRatings
+                onNavigateToDetails = onNavigateToDetails
             )
         }
 
@@ -3116,7 +2585,6 @@ private fun MobileHomeRowsLayer(
         ) { _, category ->
             val isContinueWatching = category.id == "continue_watching"
             val isRanked = category.title.contains("Top 10", ignoreCase = true)
-            val isCollectionRow = category.id.startsWith("collection_row_")
             val rowKey = remember(category.id) { "home:${category.id}" }
             val rowUsePosterCards = rememberCatalogueRowLayoutMode(rowKey) == CardLayoutMode.POSTER
             val isPortrait = category.isPortrait(rowUsePosterCards)
@@ -3180,11 +2648,6 @@ private fun MobileHomeRowsLayer(
                     }
                 }
 
-                val isPortrait = if (isCollectionRow) {
-                    category.items.firstOrNull()?.collectionTileShape == CollectionTileShape.POSTER
-                } else {
-                    rowUsePosterCards
-                }
                 val isRowSkeleton = category.items.isEmpty() || category.items.all { it.isPlaceholder }
 
                 if (isRowSkeleton) {
@@ -3247,14 +2710,12 @@ private fun MobileHomeRowsLayer(
                                 Box(
                                     modifier = Modifier.width(rowMobileItemWidth)
                                 ) {
-                                    val cardLogoUrl = if (isCollectionRow) null else cardLogoUrls["${item.mediaType}_${item.id}"]
                                     ArvioMediaCard(
                                         item = item,
                                         width = rowMobileItemWidth,
                                         isLandscape = !isPortrait,
-                                        logoImageUrl = cardLogoUrl,
+                                        logoImageUrl = cardLogoUrls["${item.mediaType}_${item.id}"],
                                         showProgress = false,
-                                        showTitle = !item.collectionHideTitle,
                                         isFocusedOverride = false,
                                         enableSystemFocus = false,
                                         onFocused = {},
@@ -3272,14 +2733,12 @@ private fun MobileHomeRowsLayer(
                                     )
                                 }
                             } else {
-                                val cardLogoUrl = if (isCollectionRow) null else cardLogoUrls["${item.mediaType}_${item.id}"]
                                 ArvioMediaCard(
                                     item = item,
                                     width = rowMobileItemWidth,
                                     isLandscape = !isPortrait,
-                                    logoImageUrl = cardLogoUrl,
+                                    logoImageUrl = cardLogoUrls["${item.mediaType}_${item.id}"],
                                     showProgress = isContinueWatching,
-                                    showTitle = !item.collectionHideTitle,
                                     isFocusedOverride = false,
                                     enableSystemFocus = false,
                                     onFocused = {},
@@ -3314,27 +2773,6 @@ private fun MobileHomeRowsLayer(
                 }
             }
         }
-
-        if (isSlowLoading) {
-            item(key = "mobile_slow_loading_indicator", contentType = "mobile_slow_loading") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_still_loading_catalogue),
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 14.sp
-                    )
-                    TextButton(onClick = onRetry) {
-                        Text(stringResource(R.string.retry), color = Color(0xFF00F0D0), fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -3351,11 +2789,7 @@ private fun TvHomeRowsLayer(
     categoryHasMoreMap: Map<String, Boolean> = emptyMap(),
     smoothScrolling: Boolean = true,
     onLoadMoreCategory: (String) -> Unit = {},
-    onItemFocusedPrefetch: (MediaItem) -> Unit = {},
     onViewAllCategory: (String) -> Unit = {},
-    featuredTrailerKey: String? = null,
-    featuredTrailerDelayMs: Long = 0L,
-    featuredTrailerVolume: Float = 0f,
     onItemClick: (MediaItem) -> Unit
 ) {
     val currentRowIndex = focusState.currentRowIndex
@@ -3463,7 +2897,6 @@ private fun TvHomeRowsLayer(
                     key = { _, category -> stableHomeRowKey("tv", category.id) },
                     contentType = { _, category ->
                         when {
-                            category.id.startsWith("collection_row_") -> "home_collection_row"
                             category.title.contains("Top 10", ignoreCase = true) -> "home_ranked_row"
                             else -> "home_category_row"
                         }
@@ -3522,9 +2955,6 @@ private fun TvHomeRowsLayer(
                                 -1
                             },
                             isFastScrolling = rowIsFocused && isFastScrolling,
-                            featuredTrailerKey = if (rowIsFocused) featuredTrailerKey else null,
-                            featuredTrailerDelayMs = featuredTrailerDelayMs,
-                            featuredTrailerVolume = featuredTrailerVolume,
                             onItemClick = onItemClick,
                             onItemFocused = onRowItemFocused
                         )
@@ -3790,14 +3220,9 @@ private fun ContentRow(
     onViewAll: () -> Unit = {},
     focusedItemIndex: Int,
     isFastScrolling: Boolean,
-    featuredTrailerKey: String? = null,
-    featuredTrailerDelayMs: Long = 0L,
-    featuredTrailerVolume: Float = 0f,
     onItemClick: (MediaItem) -> Unit,
     onItemFocused: (MediaItem, Int) -> Unit
 ) {
-    val isCollectionRow = category.id.startsWith("collection_row_")
-    val effectiveCategoryHasMore = !isCollectionRow && categoryHasMore
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val isContinueWatching = category.id == "continue_watching"
@@ -3805,11 +3230,7 @@ private fun ContentRow(
     // row spacing (which made the section layout feel loose), slightly reduce the
     // poster card width so the 1.05x focus zoom has more breathing room inside the
     // existing row spacing. ~5% smaller than before.
-    val effectivePosterMode = if (isCollectionRow) {
-        category.items.firstOrNull()?.collectionTileShape == CollectionTileShape.POSTER
-    } else {
-        usePosterCards
-    }
+    val effectivePosterMode = usePosterCards
     val cardAspectRatio = if (effectivePosterMode) 2f / 3f else 16f / 9f
     val itemWidth = if (effectivePosterMode) 105.dp else 210.dp
     val itemSpacing = 14.dp
@@ -3841,29 +3262,10 @@ private fun ContentRow(
     val itemSpanPx = remember(density, itemWidth, itemSpacing) {
         with(density) { (itemWidth + itemSpacing).toPx().coerceAtLeast(1f) }
     }
-    val hasFeaturedCard = !effectivePosterMode && featuredTrailerKey != null
-    // Tracks which item index has held focus long enough to expand.
-    // Using an index (not a boolean) means the derived `featuredExpanded`
-    // evaluates to false immediately in the same composition frame when
-    // focusedItemIndex changes — no async LaunchedEffect reset needed.
-    // Without this, the new card briefly saw featuredExpanded=true
-    // (stale from the previous card) and rendered at 380dp, causing a
-    // layout overshoot in the LazyRow before snapping back.
-    var featuredExpandedForIndex by remember { mutableIntStateOf(-1) }
-    val featuredExpanded = hasFeaturedCard && isCurrentRow &&
-        featuredExpandedForIndex == focusedItemIndex && focusedItemIndex >= 0
-    val context = LocalContext.current
-    LaunchedEffect(focusedItemIndex, hasFeaturedCard) {
-        featuredExpandedForIndex = -1
-        if (hasFeaturedCard && isCurrentRow && focusedItemIndex >= 0) {
-            delay(featuredTrailerDelayMs.coerceAtLeast(500L))
-            featuredExpandedForIndex = focusedItemIndex
-        }
-    }
-    val railFocusOverlayActive by remember(isCurrentRow, isScrollable, focusedItemIndex, totalItems, hasFeaturedCard) {
+    val railFocusOverlayActive by remember(isCurrentRow, isScrollable, focusedItemIndex, totalItems) {
         derivedStateOf {
             isCurrentRow && isScrollable && focusedItemIndex in 0 until totalItems &&
-                !hasFeaturedCard && focusedItemIndex == rowState.firstVisibleItemIndex &&
+                focusedItemIndex == rowState.firstVisibleItemIndex &&
                 rowState.firstVisibleItemScrollOffset == 0
         }
     }
@@ -4006,13 +3408,12 @@ private fun ContentRow(
                     contentType = { index, item ->
                         when {
                             item.isPlaceholder -> "placeholder_card"
-                            isCollectionRow -> "collection_tile"
                             isRanked && index < 10 -> "${item.mediaType.name}_ranked_card"
                             else -> "${item.mediaType.name}_card"
                         }
                     }
                 ) { index, item ->
-                if (!item.isPlaceholder && effectiveCategoryHasMore && index >= itemsToRender.size - 5) {
+                if (!item.isPlaceholder && categoryHasMore && index >= itemsToRender.size - 5) {
                     LaunchedEffect(itemsToRender.size) {
                         onLoadMore()
                     }
@@ -4025,91 +3426,9 @@ private fun ContentRow(
                 val onCardClick = remember {
                     { latestOnItemClick.value(currentItem.value) }
                 }
+                val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                 if (isRanked && index < 10) {
-                    val cardLogoUrl = if (isCollectionRow) null else cardLogoUrls["${item.mediaType}_${item.id}"]
-                    val rankedExpanded = hasFeaturedCard && itemIsFocused && featuredExpanded
-                    if (rankedExpanded) {
-                        // Expanded: fresh Animatable starting at itemWidth so the expansion
-                        // animates in from the card's resting size. This branch is only entered
-                        // after the 500ms focus-settle delay, so the Animatable is always new.
-                        val expandAnim = remember { Animatable(itemWidth.value) }
-                        LaunchedEffect(Unit) {
-                            expandAnim.animateTo(380f, spring())
-                        }
-                        val expandedWidth = expandAnim.value.dp
-                        Box(modifier = Modifier.width(expandedWidth)) {
-                            FeaturedMediaCard(
-                                item = item,
-                                width = expandedWidth,
-                                height = 146.dp,
-                                trailerKey = featuredTrailerKey,
-                                trailerDelayMs = 0L,
-                                trailerVolume = featuredTrailerVolume,
-                                onClick = onCardClick,
-                            )
-                            TopRankRibbon(
-                                rank = index + 1,
-                                isFocused = itemIsFocused,
-                                compact = !effectivePosterMode,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .zIndex(2f)
-                                    .padding(start = 8.dp)
-                            )
-                        }
-                    } else {
-                        // Collapsed: plain constant width — no animation state, no frame delay.
-                        // The LazyRow item is immediately itemWidth, same as non-ranked cards,
-                        // so the scroll delta is always computed against the correct layout.
-                        Box(modifier = Modifier.width(itemWidth)) {
-                            ArvioMediaCard(
-                                item = item,
-                                width = itemWidth,
-                                isLandscape = !effectivePosterMode,
-                                logoImageUrl = cardLogoUrl,
-                                showLogoImage = true,
-                                raiseOnFocus = !isFastScrolling,
-                                showProgress = false,
-                                showTitle = isCollectionRow && !item.collectionHideTitle,
-                                isFocusedOverride = itemIsFocused && !railFocusOverlayActive,
-                                focusedScale = 1f,
-                                enableFocusedImageSwap = !isCollectionRow && !isFastScrolling,
-                                animateFocus = false,
-                                enableSystemFocus = false,
-                                onFocused = onCardFocused,
-                                onClick = onCardClick,
-                            )
-                            TopRankRibbon(
-                                rank = index + 1,
-                                isFocused = itemIsFocused,
-                                compact = !effectivePosterMode,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .zIndex(2f)
-                                    .padding(start = 8.dp)
-                            )
-                        }
-                    }
-                } else {
-                    val cardLogoUrl = if (isCollectionRow) null else cardLogoUrls["${item.mediaType}_${item.id}"]
-                    val cardExpanded = hasFeaturedCard && itemIsFocused && featuredExpanded
-                    val animatedCardWidth by animateDpAsState(
-                        targetValue = if (cardExpanded) 380.dp else itemWidth,
-                        animationSpec = if (cardExpanded) spring() else snap(),
-                        label = "featuredCardWidth"
-                    )
-                    if (cardExpanded) {
-                        FeaturedMediaCard(
-                            item = item,
-                            width = animatedCardWidth,
-                            height = 146.dp,
-                            trailerKey = featuredTrailerKey,
-                            trailerDelayMs = 0L,
-                            trailerVolume = featuredTrailerVolume,
-                            onClick = onCardClick,
-                        )
-                    } else {
-                        // Normal card — not focused, not yet expanded, or hasFeaturedCard off
+                    Box(modifier = Modifier.width(itemWidth)) {
                         ArvioMediaCard(
                             item = item,
                             width = itemWidth,
@@ -4117,17 +3436,44 @@ private fun ContentRow(
                             logoImageUrl = cardLogoUrl,
                             showLogoImage = true,
                             raiseOnFocus = !isFastScrolling,
-                            showProgress = isContinueWatching,
-                            showTitle = isCollectionRow && !item.collectionHideTitle,
+                            showProgress = false,
+                            showTitle = false,
                             isFocusedOverride = itemIsFocused && !railFocusOverlayActive,
                             focusedScale = 1f,
-                            enableFocusedImageSwap = !isCollectionRow && !isFastScrolling,
+                            enableFocusedImageSwap = !isFastScrolling,
                             animateFocus = false,
                             enableSystemFocus = false,
                             onFocused = onCardFocused,
                             onClick = onCardClick,
                         )
+                        TopRankRibbon(
+                            rank = index + 1,
+                            isFocused = itemIsFocused,
+                            compact = !effectivePosterMode,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .zIndex(2f)
+                                .padding(start = 8.dp)
+                        )
                     }
+                } else {
+                    ArvioMediaCard(
+                        item = item,
+                        width = itemWidth,
+                        isLandscape = !effectivePosterMode,
+                        logoImageUrl = cardLogoUrl,
+                        showLogoImage = true,
+                        raiseOnFocus = !isFastScrolling,
+                        showProgress = isContinueWatching,
+                        showTitle = false,
+                        isFocusedOverride = itemIsFocused && !railFocusOverlayActive,
+                        focusedScale = 1f,
+                        enableFocusedImageSwap = !isFastScrolling,
+                        animateFocus = false,
+                        enableSystemFocus = false,
+                        onFocused = onCardFocused,
+                        onClick = onCardClick,
+                    )
                 }
                 }
                 if (hasViewAllCard) {

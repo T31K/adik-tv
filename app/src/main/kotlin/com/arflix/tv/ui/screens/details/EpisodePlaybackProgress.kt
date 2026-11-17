@@ -2,8 +2,8 @@ package com.arflix.tv.ui.screens.details
 
 import com.arflix.tv.data.model.Episode
 import com.arflix.tv.data.model.EpisodeIdentity
-import com.arflix.tv.data.repository.WatchHistoryEntry
-import com.arflix.tv.util.Constants
+import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.data.repository.PlaybackProgress
 
 data class EpisodePlaybackProgress(
     val percent: Int,
@@ -11,54 +11,40 @@ data class EpisodePlaybackProgress(
     val durationMs: Long,
 )
 
+/**
+ * Progress bars for the episode row: resumable [PlaybackProgress] entries (TMDB
+ * season/episode) mapped onto the displayed [episodes]. Watched episodes get none.
+ */
 internal fun episodePlaybackProgress(
     tmdbId: Int,
     episodes: List<Episode>,
-    history: List<WatchHistoryEntry>,
+    entries: List<PlaybackProgress>,
 ): Map<EpisodeIdentity, EpisodePlaybackProgress> {
-    if (episodes.isEmpty() || history.isEmpty()) return emptyMap()
+    if (episodes.isEmpty() || entries.isEmpty()) return emptyMap()
     val episodeByCanonicalCoordinates = episodes.associateBy {
         it.tmdbSeasonNumber to it.tmdbEpisodeNumber
     }
 
-    return history.asSequence()
+    return entries.asSequence()
         .filter { entry ->
-            entry.media_type == "tv" &&
-                entry.show_tmdb_id == tmdbId &&
+            entry.mediaType == MediaType.TV &&
+                entry.tmdbId == tmdbId &&
                 entry.season != null &&
-                entry.episode != null
+                entry.episode != null &&
+                entry.isResumable
         }
-        .sortedByDescending { it.updated_at ?: it.paused_at.orEmpty() }
+        .sortedByDescending { it.updatedAtMs }
         .mapNotNull { entry ->
             val episode = episodeByCanonicalCoordinates[entry.season to entry.episode]
                 ?: return@mapNotNull null
             if (episode.isWatched) return@mapNotNull null
-
-            val positionSeconds = normalizeStoredSeconds(entry.position_seconds)
-            val durationSeconds = normalizeStoredSeconds(entry.duration_seconds)
-            val storedPercent = (entry.progress.coerceIn(0f, 1f) * 100f).toInt()
-            val percent = when {
-                durationSeconds > 0L && positionSeconds > 0L ->
-                    ((positionSeconds.toDouble() / durationSeconds.toDouble()) * 100.0).toInt()
-                storedPercent > 0 -> storedPercent
-                positionSeconds > 0L -> 1
-                else -> 0
-            }.coerceIn(0, 100)
-
-            if (percent >= Constants.WATCHED_THRESHOLD) return@mapNotNull null
-            if (percent < Constants.MIN_PROGRESS_THRESHOLD && positionSeconds < 60L) {
-                return@mapNotNull null
-            }
-
             episode.identity to EpisodePlaybackProgress(
-                percent = percent,
-                positionMs = positionSeconds.coerceAtLeast(0L) * 1_000L,
-                durationMs = durationSeconds.coerceAtLeast(0L) * 1_000L,
+                // A resumable entry is at least 60s in: never show an empty bar for it.
+                percent = entry.percent.coerceAtLeast(1),
+                positionMs = entry.positionMs,
+                durationMs = entry.durationMs,
             )
         }
         .distinctBy { it.first }
         .toMap()
 }
-
-private fun normalizeStoredSeconds(value: Long): Long =
-    if (value > 86_400L) value / 1_000L else value

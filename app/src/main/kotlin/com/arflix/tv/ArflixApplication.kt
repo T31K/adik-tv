@@ -5,15 +5,6 @@ import android.app.Application
 import android.content.ComponentCallbacks2
 import android.graphics.Bitmap
 import android.os.Build
-import android.util.Log
-import androidx.hilt.work.HiltWorkerFactory
-import androidx.work.Configuration
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
@@ -22,67 +13,39 @@ import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.imageLoader
 import coil.memory.MemoryCache
-import com.arflix.tv.network.OkHttpProvider
-import com.arflix.tv.data.repository.AppUsageAnalyticsRepository
-import com.arflix.tv.data.repository.AuthRepository
-import com.arflix.tv.data.repository.AuthState
-import com.arflix.tv.data.repository.CloudSyncCoordinator
-import com.arflix.tv.data.repository.CloudSyncRepository
-import com.arflix.tv.data.repository.RealtimeSyncManager
-import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.data.repository.ProfileManager
-import com.arflix.tv.util.AppLogger
-import com.arflix.tv.util.DiagnosticsManager
+import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.util.DeviceType
+import com.arflix.tv.util.DiagnosticsManager
 import com.arflix.tv.util.detectDeviceType
-import com.arflix.tv.worker.TraktSyncWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import com.arflix.tv.util.settingsDataStore
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
- * ARVIO TV Application class
+ * ADIK TV application: image loader, crash marker, profile bootstrap. Everything else
+ * (feed sync, downloads) starts from Home once a profile is chosen.
  */
 @HiltAndroidApp
-class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFactory {
+class ArflixApplication : Application(), ImageLoaderFactory {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @Volatile
     private var appImageLoader: ImageLoader? = null
 
     @Inject
-    lateinit var workerFactory: HiltWorkerFactory
-    @Inject
     lateinit var profileManager: ProfileManager
     @Inject
-    lateinit var authRepository: AuthRepository
-    @Inject
-    lateinit var cloudSyncRepository: CloudSyncRepository
-    @Inject
-    lateinit var cloudSyncCoordinator: CloudSyncCoordinator
-    @Inject
-    lateinit var realtimeSyncManager: RealtimeSyncManager
-    @Inject
     lateinit var watchlistRepository: WatchlistRepository
-    @Inject
-    lateinit var appUsageAnalyticsRepository: AppUsageAnalyticsRepository
 
     /**
      * [OkHttpProvider.init] must run before *anything* first touches [OkHttpProvider.client]:
-     * the client is built once, lazily, and keeps whatever cache it had at that moment — with no
-     * app context there is no disk cache, for the whole process lifetime.
-     *
-     * `onCreate()` is too late. Hilt performs this Application's field injection inside
-     * `super.onCreate()`, and those injected repositories construct Retrofit — and therefore the
-     * OkHttpClient — before the first line of our own `onCreate()` body runs. `attachBaseContext`
-     * is the first callback where a context exists, so the cache is configured from here.
+     * the client is built once, lazily, and keeps whatever cache it had at that moment. Hilt
+     * injects this Application's fields inside `super.onCreate()`, so `attachBaseContext` is
+     * the first callback where a context exists.
      */
     override fun attachBaseContext(base: android.content.Context) {
         super.attachBaseContext(base)
@@ -90,25 +53,9 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
     }
 
     override fun onCreate() {
-        com.arflix.tv.network.initializeNetworkPlatform(this)
         super.onCreate()
         instance = this
         com.arflix.tv.util.NavSound.init(this) // ADIK: preload UI hover sound
-
-        // Initialize global DNS provider and user agent from DataStore before network calls.
-        appScope.launch(Dispatchers.IO) {
-            val prefs = settingsDataStore.data.first()
-            val dnsKey = androidx.datastore.preferences.core.stringPreferencesKey(OkHttpProvider.DNS_PROVIDER_PREF_KEY)
-            val dnsPref = prefs[dnsKey]
-            val provider = OkHttpProvider.parseDnsProvider(dnsPref)
-            OkHttpProvider.setDnsProvider(provider)
-
-            val uaKey = androidx.datastore.preferences.core.stringPreferencesKey(OkHttpProvider.USER_AGENT_PREF_KEY)
-            val savedUserAgent = prefs[uaKey].orEmpty()
-            OkHttpProvider.setCustomUserAgent(savedUserAgent)
-
-            runCatching { OkHttpProvider.dns.lookup("image.tmdb.org") }
-        }
 
         DiagnosticsManager.initialize(this)
 
@@ -129,65 +76,12 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
                 defaultHandler?.uncaughtException(thread, throwable) ?: android.os.Process.killProcess(android.os.Process.myPid())
             }
         }
-        // Initialize active profile asynchronously to avoid blocking cold start.
-        // Wire realtime push notification when realtime is enabled.
-        cloudSyncRepository.onPushCompleted = { realtimeSyncManager.markPush() }
 
+        // Initialize the active profile asynchronously to avoid blocking cold start.
         appScope.launch {
             runCatching { profileManager.initialize() }
-            // Preload watchlist cache in background for instant display
+            // Preload the local watchlist cache in the background.
             runCatching { watchlistRepository.getWatchlistItems() }
-            delay(2_500L)
-            cloudSyncCoordinator.start()
-            if (!authRepository.getCurrentUserId().isNullOrBlank()) {
-                if (BuildConfig.ENABLE_REALTIME_CLOUD_SYNC) {
-                    realtimeSyncManager.start()
-                }
-                // Pull early enough that reopening the app feels like an actual
-                // sync, while still letting the first frame and profile bootstrap land.
-                delay(3_000L)
-                runCatching { cloudSyncRepository.pullFromCloud() }
-            }
-        }
-
-        appScope.launch {
-            // Wait for first navigation/auth restore work to start so the
-            // event can include account context without delaying app launch.
-            delay(3_000L)
-            try {
-                appUsageAnalyticsRepository.recordAppOpen()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w("ArflixApplication", "Failed to record app open analytics", e)
-            }
-        }
-
-        // Observe auth state: start realtime on login, stop on logout
-        appScope.launch {
-            authRepository.authState.collectLatest { state ->
-                when (state) {
-                    is AuthState.Authenticated -> {
-                        delay(2_000L)
-                        if (!authRepository.getCurrentUserId().isNullOrBlank()) {
-                            cloudSyncCoordinator.start()
-                            if (BuildConfig.ENABLE_REALTIME_CLOUD_SYNC) {
-                                realtimeSyncManager.start()
-                            }
-                            runCatching { cloudSyncRepository.pullFromCloud() }
-                        }
-                    }
-                    AuthState.NotAuthenticated -> {
-                        realtimeSyncManager.stop()
-                        cloudSyncCoordinator.stop()
-                    }
-                    is AuthState.Error -> {
-                        realtimeSyncManager.stop()
-                        cloudSyncCoordinator.stop()
-                    }
-                    AuthState.Loading -> Unit
-                }
-            }
         }
     }
 
@@ -195,17 +89,12 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         val isTvDevice = detectDeviceType(this) == DeviceType.TV
         val isLowRamDevice = isLowRamDevice()
         return ImageLoader.Builder(this)
-            // Use the dedicated Coil HTTP client instead of the main API client.
-            // Avoids logging interceptor overhead and connection pool contention.
+            // Dedicated Coil HTTP client (no logging interceptor, own connection pool).
             .okHttpClient(OkHttpProvider.coilClient)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    // The 2 GB Android TV dump showed Arvio spending most of
-                    // its memory in native bitmap/texture allocations
-                    // (255 MB native heap, 77 MB GPU cache). Use a fixed TV
-                    // image budget instead of a percent of largeHeap memory so
-                    // low-RAM TVs do not drift into zram pressure while rows
-                    // are being scrolled.
+                    // Fixed TV image budget so low-RAM TVs don't drift into zram
+                    // pressure while rows are being scrolled.
                     .maxSizeBytes(
                         when {
                             isTvDevice && isLowRamDevice -> 32 * 1024 * 1024
@@ -225,11 +114,8 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
             .respectCacheHeaders(false)
             .allowRgb565(true)
             .bitmapConfig(Bitmap.Config.RGB_565)
-            // No global placeholder — card composables use their own surface
-            // background color as the visual placeholder. A global placeholder
-            // causes a dark-rectangle flash behind transparent clearlogo PNGs
-            // on the home hero. Error = transparent so failed loads are invisible
-            // (the card surface background is the fallback visual).
+            // No global placeholder (cards use their surface colour); failed loads are
+            // transparent so the card background is the fallback visual.
             .error(android.R.color.transparent)
             .components {
                 add(SvgDecoder.Factory())
@@ -260,54 +146,12 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
 
     private fun clearImageMemoryCaches() {
         appImageLoader?.memoryCache?.clear()
-        // Settings can replace Coil's global loader after DNS changes; clear the
-        // active loader too so memory-pressure callbacks always affect what UI uses.
         runCatching { imageLoader.memoryCache?.clear() }
     }
 
     private fun isLowRamDevice(): Boolean {
         val activityManager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager
         return activityManager?.isLowRamDevice == true
-    }
-
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .setMinimumLoggingLevel(android.util.Log.ASSERT)
-            .build()
-
-    /**
-     * Schedule periodic Trakt data sync
-     */
-    fun scheduleTraktSyncIfNeeded() {
-        // Use INCREMENTAL sync on startup for fast app launch
-        // Full sync only happens on periodic schedule or explicit user action
-        val oneTimeRequest = OneTimeWorkRequestBuilder<TraktSyncWorker>()
-            // Defer startup sync to keep first-run navigation and scrolling smooth.
-            .setInitialDelay(2, TimeUnit.MINUTES)
-            .setInputData(
-                workDataOf(TraktSyncWorker.INPUT_SYNC_MODE to TraktSyncWorker.SYNC_MODE_INCREMENTAL)
-            )
-            .addTag(TraktSyncWorker.TAG)
-            .build()
-
-        val syncRequest = PeriodicWorkRequestBuilder<TraktSyncWorker>(
-            TraktSyncWorker.SYNC_INTERVAL_HOURS, TimeUnit.HOURS
-        )
-            .addTag(TraktSyncWorker.TAG)
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniqueWork(
-            TraktSyncWorker.WORK_NAME_ON_OPEN,
-            ExistingWorkPolicy.KEEP,
-            oneTimeRequest
-        )
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            TraktSyncWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            syncRequest
-        )
     }
 
     companion object {

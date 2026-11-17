@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -83,11 +81,8 @@ data class ContextAction(
  */
 object ContextActions {
     val play = ContextAction("play", R.string.play, Icons.Default.PlayArrow, Pink)
-    val selectSource = ContextAction("sources", R.string.stream_title_select_source, Icons.Default.Info, TextPrimary)
     val markWatched = ContextAction("mark_watched", R.string.component_ctx_mark_watched, Icons.Default.Visibility, Color(0xFF22C55E))
     val markUnwatched = ContextAction("mark_unwatched", R.string.component_ctx_mark_unwatched, Icons.Default.VisibilityOff, TextSecondary)
-    val addWatchlist = ContextAction("add_watchlist", R.string.add_to_watchlist, Icons.Default.BookmarkBorder, Pink)
-    val removeWatchlist = ContextAction("remove_watchlist", R.string.remove_from_watchlist, Icons.Default.Bookmark, TextSecondary)
     val viewDetails = ContextAction("view_details", R.string.component_ctx_view_details, Icons.Default.Info, TextPrimary)
     val markSeasonWatched = ContextAction("mark_season_watched", R.string.component_ctx_mark_season_watched, Icons.Default.Check, Color(0xFF22C55E))
     val markSeasonUnwatched = ContextAction("mark_season_unwatched", R.string.component_ctx_mark_season_unwatched, Icons.Default.Clear, TextSecondary)
@@ -429,13 +424,13 @@ fun EpisodeContextMenu(
     seasonEpisode: String,
     isWatched: Boolean,
     onPlay: () -> Unit,
-    onSelectSource: () -> Unit,
+    // ADIK: stub, removed with stream sources — ignored; kept until DetailsScreen stops passing it.
+    @Suppress("UNUSED_PARAMETER") onSelectSource: () -> Unit = {},
     onToggleWatched: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val actions = listOf(
         ContextActions.play,
-        ContextActions.selectSource,
         if (isWatched) ContextActions.markUnwatched else ContextActions.markWatched
     )
 
@@ -447,7 +442,6 @@ fun EpisodeContextMenu(
         onAction = { action ->
             when (action.id) {
                 "play" -> onPlay()
-                "sources" -> onSelectSource()
                 "mark_watched", "mark_unwatched" -> onToggleWatched()
             }
             onDismiss()
@@ -476,50 +470,6 @@ fun SeasonContextMenu(
             when (action.id) {
                 "mark_season_watched" -> onMarkSeasonWatched()
                 "mark_season_unwatched" -> onMarkSeasonUnwatched()
-            }
-            onDismiss()
-        },
-        onDismiss = onDismiss
-    )
-}
-
-/**
- * Media item context menu with standard actions
- */
-@Composable
-fun MediaContextMenu(
-    isVisible: Boolean,
-    title: String,
-    year: String? = null,
-    isWatched: Boolean,
-    isInWatchlist: Boolean,
-    onPlay: () -> Unit,
-    onSelectSource: () -> Unit,
-    onToggleWatched: () -> Unit,
-    onToggleWatchlist: () -> Unit,
-    onViewDetails: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val actions = listOf(
-        ContextActions.play,
-        ContextActions.selectSource,
-        if (isWatched) ContextActions.markUnwatched else ContextActions.markWatched,
-        if (isInWatchlist) ContextActions.removeWatchlist else ContextActions.addWatchlist,
-        ContextActions.viewDetails
-    )
-
-    ContextMenu(
-        isVisible = isVisible,
-        title = title,
-        subtitle = year,
-        actions = actions,
-        onAction = { action ->
-            when (action.id) {
-                "play" -> onPlay()
-                "sources" -> onSelectSource()
-                "mark_watched", "mark_unwatched" -> onToggleWatched()
-                "add_watchlist", "remove_watchlist" -> onToggleWatchlist()
-                "view_details" -> onViewDetails()
             }
             onDismiss()
         },

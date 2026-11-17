@@ -10,6 +10,9 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.PlaybackProgressStore
 import com.arflix.tv.megaflix.MegaflixLibraryBuilder
 import com.arflix.tv.player.PlaybackState
+import com.arflix.tv.util.PlayerPrefs
+import com.arflix.tv.util.PlayerPrefsValues
+import kotlinx.coroutines.runBlocking
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -78,7 +81,10 @@ class VlcPlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(VlcPlayerUiState(title = showTitle, subtitle = episodeLabel()))
     val uiState: StateFlow<VlcPlayerUiState> = _uiState.asStateFlow()
 
-    private val libVlc: LibVLC = LibVLC(context, VLC_OPTIONS)
+    // Tiny DataStore read (already cached after app start); options are fixed per LibVLC instance.
+    private val prefs: PlayerPrefsValues = runBlocking(Dispatchers.IO) { PlayerPrefs.read(context) }
+    private val autoSubtitles: Boolean = prefs.subtitleLanguage.isNotBlank()
+    private val libVlc: LibVLC = LibVLC(context, vlcOptions(prefs))
     private val player: MediaPlayer = MediaPlayer(libVlc)
     private var attachedLayout: VLCVideoLayout? = null
     private var started = false
@@ -194,8 +200,8 @@ class VlcPlayerViewModel @Inject constructor(
         val subs = player.spuTracks.orEmpty()
             .filter { it.id >= 0 }
             .map { VlcTrack(it.id, it.name ?: "Subtitle ${it.id}") }
-        // Subtitles start off unless the viewer turns them on.
-        if (!subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
+        // Subtitles start off unless the viewer turns them on (or picked a default language).
+        if (!autoSubtitles && !subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
             subtitleDefaultApplied = true
             if (player.spuTrack >= 0) player.setSpuTrack(-1)
         }
@@ -379,12 +385,28 @@ class VlcPlayerViewModel @Inject constructor(
         /** Survives the ViewModel so the final progress write isn't cancelled on exit. */
         private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-        private val VLC_OPTIONS = arrayListOf(
+        /** libVLC options from Settings → Subtitles / Language (see [PlayerPrefs]). */
+        private fun vlcOptions(p: PlayerPrefsValues): ArrayList<String> = arrayListOf(
             "--audio-time-stretch",
-            "--audio-language=eng,en",
-            "--sub-language=none",
+            "--audio-language=${languageList(p.audioLanguage)}",
+            "--sub-language=${if (p.subtitleLanguage.isBlank()) "none" else languageList(p.subtitleLanguage)}",
             "--no-sub-autodetect-file",
+            "--sub-text-scale=${p.subtitleScalePercent}",
+            "--freetype-color=${p.subtitleColor and 0xFFFFFF}",
+            "--freetype-background-color=0",
+            "--freetype-background-opacity=${if (p.subtitleBackground) 160 else 0}",
             "--file-caching=1500"
         )
+
+        /** "eng" → "eng,en" so both 3- and 2-letter track tags match. */
+        private fun languageList(iso639_2: String): String {
+            val two = mapOf(
+                "eng" to "en", "fre" to "fr", "fra" to "fr", "ger" to "de", "deu" to "de", "spa" to "es",
+                "ita" to "it", "por" to "pt", "dut" to "nl", "nld" to "nl", "jpn" to "ja", "kor" to "ko",
+                "chi" to "zh", "zho" to "zh", "msa" to "ms", "may" to "ms", "ind" to "id", "hin" to "hi",
+                "tam" to "ta", "ara" to "ar", "rus" to "ru", "tha" to "th", "vie" to "vi"
+            )[iso639_2.lowercase()]
+            return listOfNotNull(iso639_2.lowercase(), two).joinToString(",")
+        }
     }
 }

@@ -26,12 +26,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -75,12 +73,10 @@ import com.arflix.tv.R
 fun MediaContextMenu(
     isVisible: Boolean,
     title: String,
-    isInWatchlist: Boolean,
     isWatched: Boolean,
     isContinueWatching: Boolean = false,
     onPlay: () -> Unit,
     onViewDetails: () -> Unit,
-    onToggleWatchlist: () -> Unit,
     onToggleWatched: () -> Unit,
     onRemoveFromContinueWatching: (() -> Unit)? = null,
     onDismiss: () -> Unit
@@ -99,11 +95,6 @@ fun MediaContextMenu(
             icon = Icons.Default.Info,
             labelRes = R.string.details,
             action = onViewDetails
-        ))
-        add(MenuItem(
-            icon = if (isInWatchlist) Icons.Default.Remove else Icons.Default.Add,
-            labelRes = if (isInWatchlist) R.string.remove_from_watchlist else R.string.add_to_watchlist,
-            action = onToggleWatchlist
         ))
         add(MenuItem(
             icon = if (isWatched) Icons.Default.Visibility else Icons.Default.Check,

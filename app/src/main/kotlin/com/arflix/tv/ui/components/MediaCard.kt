@@ -40,7 +40,6 @@ import coil.request.ImageRequest
 import coil.size.Precision
 import coil.size.Scale
 import com.arflix.tv.R
-import com.arflix.tv.data.model.CollectionGroupKind
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
@@ -75,9 +74,7 @@ fun MediaCard(
     width: Dp = 280.dp,  // Arctic Fuse 2: larger cards by default
     isLandscape: Boolean = true,
     logoImageUrl: String? = null,
-    // Collection tiles supply a separate focus-state image (animated GIF)
-    // that swaps in when the card is focused, so the row stays static
-    // when idle and only the hovered tile animates.
+    // Optional focus-state image that swaps in when the card is focused.
     focusImageUrl: String? = null,
     enableFocusedImageSwap: Boolean = true,
     animateFocus: Boolean = true,
@@ -119,31 +116,16 @@ fun MediaCard(
     // produce image="" in toMediaItem(). Passing "" to Coil throws
     // "Unable to create a fetcher that supports: " and the card stays dark forever.
     // With this guard, cards with no image simply show the surface background color.
-    // Collection tiles (services/franchises/genres) encode the focus-state
-    // image as `item.backdrop` and the static cover as `item.image`. Swap
-    // between them based on focus so the row is calm while idle and only the
-    // hovered tile animates its GIF. Regular media items keep the existing
-    // behavior (landscape uses backdrop art, poster uses image).
-    val isCollectionTile = item.status?.startsWith("collection:") == true
-    val isChannelLogo = item.status?.startsWith("iptv:") == true
     val continueWatchingArtwork = item.episodeStill
         ?.takeIf { showProgress && isLandscape && it.isNotBlank() }
-    val baseImageUrl = if (isCollectionTile) {
-        item.image.takeIf { it.isNotBlank() } ?: item.backdrop?.takeIf { it.isNotBlank() }
-    } else if (isLandscape) {
+    val baseImageUrl = if (isLandscape) {
         (continueWatchingArtwork ?: item.backdrop ?: item.image).takeIf { it.isNotBlank() }
     } else {
         item.image.takeIf { it.isNotBlank() }
     }
     val explicitFocusUrl = focusImageUrl?.takeIf { it.isNotBlank() }
-    val collectionFocusUrl = if (isCollectionTile) {
-        item.backdrop?.takeIf { it.isNotBlank() && it != item.image }
-    } else null
-    val isSportsCollectionTile = item.status?.startsWith("collection:sports_collection:") == true
-    val showCollectionTitleOverlay = isCollectionTile && showTitle && !isSportsCollectionTile
-    val isGenreCollectionTile = item.collectionGroup == CollectionGroupKind.GENRE
     val rawImageUrl = if (visualFocused && enableFocusedImageSwap) {
-        explicitFocusUrl ?: collectionFocusUrl ?: baseImageUrl
+        explicitFocusUrl ?: baseImageUrl
     } else {
         baseImageUrl
     }
@@ -154,26 +136,25 @@ fun MediaCard(
     val context = LocalContext.current
     val density = LocalDensity.current
     val overlayBrush: Brush? = null  // Gradient removed per user feedback
-    val imageRequest = remember(rawImageUrl, width, aspectRatio, isMobile, isChannelLogo) {
+    val imageRequest = remember(rawImageUrl, width, aspectRatio, isMobile) {
         if (rawImageUrl == null) return@remember null
         val widthPx = with(density) { width.roundToPx() }
         val heightPx = (widthPx / aspectRatio).toInt().coerceAtLeast(1)
-        val cacheKey = "$rawImageUrl|${widthPx}x$heightPx" + if (isChannelLogo) "|channel-logo" else ""
+        val cacheKey = "$rawImageUrl|${widthPx}x$heightPx"
         ImageRequest.Builder(context)
             .data(rawImageUrl)
             .size(widthPx, heightPx)
-            .scale(if (isChannelLogo) Scale.FIT else Scale.FILL)
+            .scale(Scale.FILL)
             .precision(Precision.INEXACT)
             .allowHardware(true)
             .memoryCacheKey(cacheKey)
             .placeholderMemoryCacheKey(cacheKey)
-            .crossfade(if (isMobile && !isChannelLogo) 250 else 0)
+            .crossfade(if (isMobile) 250 else 0)
             .build()
     }
-    var channelLogoFailed by remember(imageRequest) { mutableStateOf(false) }
     var artworkIsOpaque by remember(imageRequest) { mutableStateOf(false) }
     // Performance: Removed context/density from keys
-    val effectiveLogoImageUrl = logoImageUrl.takeIf { showLogoImage && !isChannelLogo }
+    val effectiveLogoImageUrl = logoImageUrl.takeIf { showLogoImage }
     val logoRequest = remember(effectiveLogoImageUrl, isMobile) {
         val logoWidthPx = with(density) { 220.dp.roundToPx() }.coerceAtLeast(1)
         val logoHeightPx = with(density) { 64.dp.roundToPx() }.coerceAtLeast(1)
@@ -221,46 +202,33 @@ fun MediaCard(
             },
         ) { _ ->
             Box(modifier = Modifier.fillMaxSize()) {
-                // Channel logos can be transparent: never leave placeholder text behind them.
                 if (!artworkIsOpaque) Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (isChannelLogo) Modifier.background(ArvioSkin.colors.surface)
-                              else Modifier.background(missingArtworkBrush)),
+                        .background(missingArtworkBrush),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!isChannelLogo || imageRequest == null || channelLogoFailed) {
-                        Text(
-                            text = item.title,
-                            style = ArvioSkin.typography.cardTitle,
-                            color = Color.White.copy(alpha = 0.72f),
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 10.dp)
-                        )
-                    }
+                    Text(
+                        text = item.title,
+                        style = ArvioSkin.typography.cardTitle,
+                        color = Color.White.copy(alpha = 0.72f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp)
+                    )
                 }
                 if (imageRequest != null) {
                     AsyncImage(
                         model = imageRequest,
                         contentDescription = item.title,
-                        contentScale = if (isChannelLogo) ContentScale.Fit else ContentScale.Crop,
-                        onError = {
-                            artworkIsOpaque = false
-                            if (isChannelLogo) channelLogoFailed = true
-                        },
+                        contentScale = ContentScale.Crop,
+                        onError = { artworkIsOpaque = false },
                         onSuccess = {
-                            if (isChannelLogo) channelLogoFailed = false
                             // Keep the fallback behind transparent artwork and crossfades.
-                            artworkIsOpaque = !isMobile && !isChannelLogo &&
+                            artworkIsOpaque = !isMobile &&
                                 it.result.drawable.opacity == android.graphics.PixelFormat.OPAQUE
                         },
-                        modifier = Modifier.fillMaxSize().then(
-                            if (isChannelLogo) Modifier.padding(
-                                horizontal = width * 0.1f,
-                                vertical = (width / aspectRatio) * 0.12f
-                            ) else Modifier
-                        ),
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
                 if (overlayBrush != null) {
@@ -284,60 +252,10 @@ fun MediaCard(
                     MegaflixStatusBadge("RETRY", Modifier.align(Alignment.TopStart))
                 }
 
-                if (showCollectionTitleOverlay) {
-                    Box(
-                        modifier = Modifier
-                            .align(if (isGenreCollectionTile) Alignment.BottomStart else Alignment.TopStart)
-                            .padding(
-                                start = 12.dp,
-                                end = 12.dp,
-                                top = if (isGenreCollectionTile) 12.dp else 12.dp,
-                                bottom = if (isGenreCollectionTile) 14.dp else 12.dp
-                            )
-                            .clip(RoundedCornerShape(if (isGenreCollectionTile) 12.dp else 10.dp))
-                            .background(
-                                Color.Black.copy(alpha = if (visualFocused) {
-                                    if (isGenreCollectionTile) 0.72f else 0.62f
-                                } else {
-                                    if (isGenreCollectionTile) 0.58f else 0.52f
-                                })
-                            )
-                            .border(
-                                width = if (visualFocused) {
-                                    if (isGenreCollectionTile) 1.dp else 1.5.dp
-                                } else {
-                                    1.dp
-                                },
-                                color = Color.White.copy(alpha = if (visualFocused) 0.9f else 0.28f),
-                                shape = RoundedCornerShape(if (isGenreCollectionTile) 12.dp else 10.dp)
-                            )
-                            .padding(
-                                horizontal = if (isGenreCollectionTile) 12.dp else 10.dp,
-                                vertical = if (isGenreCollectionTile) 8.dp else 7.dp
-                            )
-                    ) {
-                        Text(
-                            text = item.title,
-                            style = ArvioSkin.typography.cardTitle.copy(
-                                fontSize = when {
-                                    isGenreCollectionTile && isLandscape -> 18.sp
-                                    isLandscape -> 15.sp
-                                    else -> 14.sp
-                                }
-                            ),
-                            color = Color.White.copy(alpha = 0.98f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
                 // Official logo/art overlay is only used on landscape cards.
                 // Poster layout should stay image-first on TV, otherwise the
                 // clearlogo crowds the poster art and looks double-stamped.
-                // Collection tiles already embed their own branding, so they
-                // stay logo-free in both layouts.
-                if (logoRequest != null && isLandscape && !isCollectionTile) {
+                if (logoRequest != null && isLandscape) {
                     AsyncImage(
                         model = logoRequest,
                         contentDescription = stringResource(R.string.component_media_logo, item.title),
@@ -490,7 +408,7 @@ fun MediaCard(
             }
         }
 
-        if (showTitle && !showCollectionTitleOverlay) {
+        if (showTitle) {
             Spacer(modifier = Modifier.height(ArvioSkin.spacing.x2))
 
             Text(
@@ -741,73 +659,6 @@ fun PosterCard(
                 )
             }
         }
-    }
-}
-
-/**
- * Wide focused card that shows backdrop art and plays the trailer inline.
- * Used in TV card rows: the focused item expands to this wider landscape format
- * while other items in the row keep their normal width. The trailer starts
- * after [trailerDelayMs] (same setting as the hero backdrop trailer).
- */
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun FeaturedMediaCard(
-    item: MediaItem,
-    width: Dp,
-    height: Dp,
-    trailerKey: String?,
-    trailerDelayMs: Long,
-    trailerVolume: Float,
-    onClick: () -> Unit,
-) {
-    val shape = rememberArvioCardShape(ArvioSkin.radius.md)
-    val imageUrl = (item.backdrop ?: item.image).takeIf { it.isNotBlank() }
-
-    ArvioFocusableSurface(
-        modifier = Modifier.size(width, height),
-        shape = shape,
-        backgroundColor = Color(0xFF1A1A1A),
-        outlineColor = ArvioSkin.colors.focusOutline,
-        outlineWidth = 2.5.dp,
-        focusedScale = 1f,
-        pressedScale = 0.97f,
-        animateFocus = false,
-        enableSystemFocus = false,
-        isFocusedOverride = true,
-        onClick = onClick,
-    ) { _ ->
-        if (imageUrl != null) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        // Bottom gradient so title text is readable over the backdrop/trailer
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.85f)
-                    )
-                )
-        )
-        Text(
-            text = item.title,
-            style = ArvioSkin.typography.cardTitle,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        )
     }
 }
 

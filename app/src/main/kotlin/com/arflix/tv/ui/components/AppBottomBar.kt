@@ -28,9 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -128,8 +126,7 @@ internal fun shouldShowBottomBar(
     isFullscreenRoute: Boolean
 ): Boolean {
     if (!isMobile || currentRoute == null || isFullscreenRoute) return false
-    val isProfileOrLogin = currentRoute == Screen.ProfileSelection.route || currentRoute == Screen.Login.route
-    return !isProfileOrLogin
+    return currentRoute != Screen.ProfileSelection.route
 }
 
 data class BottomBarItem(
@@ -141,8 +138,6 @@ data class BottomBarItem(
 val bottomBarItems = listOf(
     BottomBarItem(R.string.home, Icons.Default.Home, "home"),
     BottomBarItem(R.string.search, Icons.Default.Search, "search"),
-    BottomBarItem(R.string.nav_library, Icons.Default.Bookmark, "watchlist"),
-    BottomBarItem(R.string.topbar_tv, Icons.Default.LiveTv, "tv"),
     BottomBarItem(R.string.settings, Icons.Default.Settings, "settings")
 )
 

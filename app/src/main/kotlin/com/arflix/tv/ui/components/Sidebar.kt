@@ -61,7 +61,9 @@ import com.arflix.tv.ui.theme.TextSecondary
 enum class SidebarItem(val icon: ImageVector, @StringRes val labelRes: Int) {
     SEARCH(Icons.Outlined.Search, R.string.search),
     HOME(Icons.Outlined.Movie, R.string.movies),
+    // ADIK: stub, removed with watchlist — never shown; kept until Details/Search/Settings drop their `when` branches.
     WATCHLIST(Icons.Outlined.Bookmark, R.string.nav_library),
+    // ADIK: stub, removed with live TV — never shown; kept until Details/Search/Settings drop their `when` branches.
     TV(Icons.Outlined.LiveTv, R.string.tv_shows),
     SETTINGS(Icons.Outlined.Settings, R.string.settings)
 }
@@ -78,12 +80,12 @@ fun Sidebar(
     onItemSelected: (SidebarItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val centerItems = listOf(SidebarItem.SEARCH, SidebarItem.HOME, SidebarItem.WATCHLIST, SidebarItem.TV)
+    val centerItems = listOf(SidebarItem.SEARCH, SidebarItem.HOME)
     val bottomItem = SidebarItem.SETTINGS
     val hasProfile = profile != null
-    // With profile: index 0 = profile, 1-4 = center items, 5 = settings. Without: 0-3 = center, 4 = settings.
+    // With profile: index 0 = profile, then center items, then settings.
     val centerFocusedIndex = if (hasProfile) focusedIndex - 1 else focusedIndex
-    val settingsFocused = if (hasProfile) focusedIndex == 5 else focusedIndex == 4
+    val settingsFocused = centerFocusedIndex == centerItems.size
 
     // Sidebar: subtle transparent gradient so backdrop shows through
     Box(
@@ -117,7 +119,7 @@ fun Sidebar(
             // Flexible space - pushes center group down
             Spacer(modifier = Modifier.weight(1f))
 
-            // Center group: Search, Home, Watchlist, TV (vertically centered)
+            // Center group: Search, Home (vertically centered)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(28.dp)

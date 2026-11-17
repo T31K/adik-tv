@@ -6,16 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.arflix.tv.R
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.model.ProfileColors
-import com.arflix.tv.data.repository.CloudSyncRepository
-import com.arflix.tv.data.repository.AuthRepository
-import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.data.repository.ProfileAvatarImageManager
 import com.arflix.tv.data.repository.ProfileRepository
-import com.arflix.tv.data.repository.TraktRepository
-import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.repository.WatchlistRepository
-import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.ui.components.ToastType
 import com.arflix.tv.util.PinUtil
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 data class ProfileUiState(
@@ -61,25 +54,18 @@ data class ProfileUiState(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val authRepository: AuthRepository,
     private val profileRepository: ProfileRepository,
     private val profileManager: ProfileManager,
-    private val traktRepository: TraktRepository,
-    private val watchHistoryRepository: WatchHistoryRepository,
     private val watchlistRepository: WatchlistRepository,
-    private val iptvRepository: IptvRepository,
-    private val profileAvatarImageManager: ProfileAvatarImageManager,
-    private val cloudSyncRepository: CloudSyncRepository
+    private val profileAvatarImageManager: ProfileAvatarImageManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
-    private var lastInitialRestoreUserId: String? = null
 
     init {
         loadProfiles()
         observeProfiles()
-        restoreCloudProfilesForFreshLogin()
     }
 
     private fun loadProfiles() {
@@ -111,58 +97,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    private fun restoreCloudProfilesForFreshLogin() {
-        viewModelScope.launch {
-            authRepository.authState.collect { state ->
-                if (state !is AuthState.Authenticated) {
-                    lastInitialRestoreUserId = null
-                    if (_uiState.value.isLoading) {
-                        loadProfiles()
-                    }
-                    return@collect
-                }
-
-                val userId = state.userId
-                if (lastInitialRestoreUserId == userId || cloudSyncRepository.hasMeaningfulLocalProfiles()) {
-                    return@collect
-                }
-
-                lastInitialRestoreUserId = userId
-                // Keep profile selector responsive while cloud restore runs. If we
-                // already have local profiles, only show them first and restore in
-                // the background.
-                val hasLocalProfiles = runCatching { profileRepository.getProfiles() }
-                    .getOrNull()
-                    ?.isNotEmpty() == true
-                if (!hasLocalProfiles) {
-                    _uiState.value = _uiState.value.copy(isLoading = true)
-                }
-
-                var restoreResult = withContext(Dispatchers.IO) {
-                    withTimeoutOrNull(18_000L) {
-                        cloudSyncRepository.pullFromCloud(pushPendingLocalFirst = false)
-                    } ?: CloudSyncRepository.RestoreResult.FAILED
-                }
-                if (restoreResult == CloudSyncRepository.RestoreResult.FAILED) {
-                    delay(1_200L)
-                    restoreResult = withContext(Dispatchers.IO) {
-                        withTimeoutOrNull(18_000L) {
-                            cloudSyncRepository.pullFromCloud(pushPendingLocalFirst = false)
-                        } ?: CloudSyncRepository.RestoreResult.FAILED
-                    }
-                }
-
-                val profiles = profileRepository.getProfiles()
-                val activeProfile = profileRepository.getActiveProfile()
-                _uiState.value = _uiState.value.copy(
-                    profiles = profiles,
-                    activeProfile = activeProfile,
-                    isLoading = false
-                )
-            }
-        }
-    }
-
     private fun showToast(message: String, type: ToastType = ToastType.SUCCESS) {
         _uiState.value = _uiState.value.copy(
             toastMessage = message,
@@ -179,16 +113,6 @@ class ProfileViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showToast = false)
     }
 
-    /**
-     * Preload Continue Watching data when a profile is focused (before selection).
-     * This enables instant display when the user actually selects the profile.
-     */
-    fun preloadForProfile(profile: Profile) {
-        viewModelScope.launch {
-            traktRepository.preloadContinueWatchingForProfile(profile.id)
-        }
-    }
-
     fun selectProfile(profile: Profile) {
         if (_uiState.value.isSwitchingProfile) return
 
@@ -199,51 +123,17 @@ class ProfileViewModel @Inject constructor(
                     profileRepository.getActiveProfileId()
                 }
                 val isSameProfile = previousProfileId == profile.id
-                withContext(Dispatchers.Default) {
-                    // CRITICAL: Clear ALL profile caches BEFORE switching to ensure complete isolation.
-                    // Keep this off the main thread; some profiles carry enough data here to stall
-                    // touch devices during the profile tap transition.
-                    if (!isSameProfile) {
-                        traktRepository.clearAllProfileCaches()
-                        watchHistoryRepository.clearProfileCaches()
-                        watchlistRepository.clearWatchlistCache()
-                        iptvRepository.invalidateCache()
-                    }
-                }
+                // Clear profile caches BEFORE switching to keep profiles isolated.
+                if (!isSameProfile) watchlistRepository.clearWatchlistCache()
 
                 // Update ProfileManager cache immediately so profile-scoped keys are correct
                 // for any work started after selection.
                 profileManager.setCurrentProfileId(profile.id)
                 profileManager.setCurrentProfileName(profile.name)
 
-                // Activate any preloaded Continue Watching cache for instant Home population.
-                traktRepository.activatePreloadedCache(profile.id)
-
-                // Persist only actual profile changes. Re-selecting the current
-                // profile used to mark the full cloud payload dirty on every launch.
                 if (!isSameProfile) {
                     withContext(Dispatchers.IO) {
                         profileRepository.setActiveProfile(profile.id)
-                    }
-                }
-
-                viewModelScope.launch(Dispatchers.IO) {
-                    if (profileRepository.getActiveProfileId() != profile.id) return@launch
-                    runCatching { iptvRepository.warmupFromCacheOnly() }
-                }
-
-                // Home performs one throttled cloud pull after its local snapshot is
-                // visible. Doing two pulls plus a forced megabyte-sized push here made
-                // catalog loading compete with cloud serialization and network traffic.
-
-                // Defer network parsing to keep initial Home navigation smooth. The
-                // cache-only warmup above is safe to run immediately because it never
-                // touches the provider.
-                viewModelScope.launch(Dispatchers.IO) {
-                    delay(45_000L)
-                    if (profileRepository.getActiveProfileId() != profile.id) return@launch
-                    runCatching {
-                        iptvRepository.prefetchFreshStartupData()
                     }
                 }
             } finally {
@@ -253,11 +143,8 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun switchProfile() {
-        // Clear all caches when leaving a profile to prevent data leakage
-        traktRepository.clearAllProfileCaches()
-        watchHistoryRepository.clearProfileCaches()
+        // Clear caches when leaving a profile to prevent data leakage
         watchlistRepository.clearWatchlistCache()
-        iptvRepository.invalidateCache()
 
         viewModelScope.launch {
             profileRepository.clearActiveProfile()
@@ -347,7 +234,6 @@ class ProfileViewModel @Inject constructor(
             }
             _uiState.value = _uiState.value.copy(showAddDialog = false)
             showToast(context.getString(R.string.profile_created_success), ToastType.SUCCESS)
-            runCatching { cloudSyncRepository.pushToCloud(force = true) }
         }
     }
 
@@ -416,7 +302,6 @@ class ProfileViewModel @Inject constructor(
             profileRepository.updateProfile(updatedProfile)
             _uiState.value = _uiState.value.copy(editingProfile = null)
             showToast(context.getString(R.string.profile_updated), ToastType.SUCCESS)
-            runCatching { cloudSyncRepository.pushToCloud(force = true) }
         }
     }
 
@@ -450,14 +335,10 @@ class ProfileViewModel @Inject constructor(
             profileRepository.deleteProfile(profile.id)
             showToast(context.getString(R.string.profile_deleted), ToastType.SUCCESS)
             if (activeId == profile.id) {
-                traktRepository.clearAllProfileCaches()
-                watchHistoryRepository.clearProfileCaches()
                 watchlistRepository.clearWatchlistCache()
-                iptvRepository.invalidateCache()
                 profileManager.setCurrentProfileId("default")
                 profileManager.setCurrentProfileName("default")
             }
-            runCatching { cloudSyncRepository.pushToCloud(force = true) }
         }
     }
 
@@ -540,7 +421,6 @@ class ProfileViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(editingProfile = updatedProfile)
             hidePinDialog()
             showToast(context.getString(R.string.profile_pin_set_success), ToastType.SUCCESS)
-            runCatching { cloudSyncRepository.pushToCloud(force = true) }
         }
     }
 
@@ -550,7 +430,6 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             profileRepository.updateProfile(updatedProfile)
             _uiState.value = _uiState.value.copy(editingProfile = updatedProfile)
-            runCatching { cloudSyncRepository.pushToCloud(force = true) }
         }
     }
 }

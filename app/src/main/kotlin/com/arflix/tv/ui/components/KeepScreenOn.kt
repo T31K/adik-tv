@@ -14,7 +14,7 @@ import java.util.WeakHashMap
  * Keeps the screen on while this composable is in the composition and [active] is true.
  * Releases the flag when [active] becomes false or the composable leaves composition.
  *
- * Use in any screen where media is playing (player, live TV, trailer).
+ * Use in any screen where media is playing (e.g. the player).
  */
 @Composable
 fun KeepScreenOn(active: Boolean = true) {

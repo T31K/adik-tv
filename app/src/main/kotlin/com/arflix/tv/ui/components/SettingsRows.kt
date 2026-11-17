@@ -48,9 +48,9 @@ import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.ui.skin.resolveAccentColor
 
-/** Display-only localization of stored setting values (Off/Any/Medium/White...).
+/** Display-only localization of stored setting values (Off/On/White...).
  *  The stored/compared value stays English; only the shown label is translated.
- *  Unknown values (720p, 4K, language/DNS names) pass through unchanged. */
+ *  Unknown values (sizes, language names) pass through unchanged. */
 @Composable
 internal fun localizeSettingValue(value: String?): String {
     val safeValue = value ?: return ""
@@ -58,13 +58,6 @@ internal fun localizeSettingValue(value: String?): String {
     "Off" -> stringResource(R.string.off)
     "On" -> stringResource(R.string.on)
     "Auto" -> stringResource(R.string.auto)
-    "Any" -> stringResource(R.string.settings_value_any)
-    "Always" -> stringResource(R.string.settings_value_always)
-    "Seamless only" -> stringResource(R.string.settings_value_seamless)
-    "Small" -> stringResource(R.string.settings_value_small)
-    "Medium" -> stringResource(R.string.settings_value_medium)
-    "Large" -> stringResource(R.string.settings_value_large)
-    "Extra Large" -> stringResource(R.string.settings_value_extra_large)
     "White" -> stringResource(R.string.settings_value_white)
     "Red" -> stringResource(R.string.settings_value_red)
     "Orange" -> stringResource(R.string.settings_value_orange)
@@ -74,18 +67,6 @@ internal fun localizeSettingValue(value: String?): String {
     "Indigo" -> stringResource(R.string.settings_value_indigo)
     "Violet" -> stringResource(R.string.settings_value_violet)
     "Cyan" -> stringResource(R.string.settings_value_cyan)
-    "Normal" -> stringResource(R.string.settings_value_normal)
-    "Bold" -> stringResource(R.string.settings_value_bold)
-    "Background" -> stringResource(R.string.settings_value_background)
-    "Low" -> stringResource(R.string.settings_value_low)
-    "Bottom" -> stringResource(R.string.settings_value_bottom)
-    "High" -> stringResource(R.string.settings_value_high)
-    "None" -> stringResource(R.string.settings_value_none)
-    "Forced" -> stringResource(R.string.settings_value_forced)
-    "Auto (Original)" -> stringResource(R.string.settings_value_auto_original)
-    "Tablet" -> stringResource(R.string.settings_ui_mode_tablet)
-    "Phone" -> stringResource(R.string.settings_ui_mode_phone)
-    "System DNS" -> stringResource(R.string.settings_dns_system)
     "12-hour" -> stringResource(R.string.settings_clock_12h)
     "24-hour" -> stringResource(R.string.settings_clock_24h)
     else -> safeValue
@@ -251,6 +232,7 @@ fun SettingsToggleRow(
     }
 }
 
+// ADIK: stub, removed with the extensions screen — MobileSettingsCategory/MobileSettingsRow have no other caller.
 @Composable
 fun MobileSettingsCategory(
     title: String,

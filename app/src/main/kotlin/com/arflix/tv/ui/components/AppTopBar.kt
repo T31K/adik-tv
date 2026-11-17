@@ -61,12 +61,9 @@ val AppTopBarContentTopInset = 98.dp
 val MobileContentTopInset = 16.dp
 val AppTopBarHorizontalPadding = 28.dp
 
-// Navigation items that appear CENTERED in the top bar (Search, Home, Watchlist, TV).
+// Navigation items that appear CENTERED in the top bar (Search, Home).
 // Settings is NOT in this list — it's rendered as a standalone gear icon on the right.
-// Megaflix: local-only — hide Watchlist (online) and TV (IPTV/live). Keep Search + Home.
-private val NAV_ITEMS = SidebarItem.entries.filter {
-    it != SidebarItem.SETTINGS && it != SidebarItem.WATCHLIST
-}
+private val NAV_ITEMS = listOf(SidebarItem.SEARCH, SidebarItem.HOME)
 
 fun topBarMaxIndex(hasProfile: Boolean): Int {
     // Profile (0 if shown) + nav items + settings gear (last index)
@@ -101,7 +98,6 @@ fun AppTopBar(
     profile: Profile? = null,
     profileCount: Int = 1,
     clockFormat: String = "24h",
-    syncStatus: com.arflix.tv.data.repository.CloudSyncStatus = com.arflix.tv.data.repository.CloudSyncStatus.NOT_SIGNED_IN,
     hasUpdateBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -145,7 +141,7 @@ fun AppTopBar(
                 Spacer(modifier = Modifier.width(16.dp))
             }
 
-            // ── CENTER: Navigation chips (Search, Home, Watchlist, TV) ──
+            // ── CENTER: Navigation chips (Search, Home) ──
             Row(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
@@ -230,11 +226,7 @@ private fun TopBarNavChip(
         animationSpec = tween(if (isFocused) 100 else 0),
         label = "topbar_scale"
     )
-    val label = if (item == SidebarItem.TV) {
-        stringResource(R.string.topbar_tv)
-    } else {
-        stringResource(item.labelRes)
-    }
+    val label = stringResource(item.labelRes)
 
     Row(
         modifier = Modifier

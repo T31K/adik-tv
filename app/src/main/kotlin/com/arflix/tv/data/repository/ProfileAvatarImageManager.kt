@@ -7,17 +7,11 @@ import android.net.Uri
 import android.util.Base64
 import com.arflix.tv.R
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.util.Constants
 import com.arflix.tv.util.ProfileAvatarFiles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -28,12 +22,11 @@ data class ImportedProfileAvatar(
     val storagePath: String?
 )
 
+/** Custom profile photos, stored as local files only (see [ProfileAvatarFiles]). */
 @Singleton
 class ProfileAvatarImageManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val authRepository: AuthRepository
+    @ApplicationContext private val context: Context
 ) {
-    private val httpClient = OkHttpClient()
 
     suspend fun importAvatar(profileId: String, uriString: String): ImportedProfileAvatar =
         withContext(Dispatchers.IO) {
@@ -47,77 +40,29 @@ class ProfileAvatarImageManager @Inject constructor(
             } ?: throw IllegalArgumentException(context.getString(R.string.avatar_decode_failed))
 
             ProfileAvatarFiles.cleanupProfile(context, profileId, keepVersion = version)
-            ImportedProfileAvatar(
-                version = version,
-                storagePath = uploadAvatar(profileId, version, file).getOrNull()
-            )
+            ImportedProfileAvatar(version = version, storagePath = null)
         }
 
+    /** Writes [inlineBase64] as the profile's avatar file when the file is missing. */
     suspend fun restoreAvatarIfNeeded(profile: Profile, inlineBase64: String? = null) =
         withContext(Dispatchers.IO) {
-            if (profile.avatarImageVersion <= 0L) {
-                // Avatar removal is handled explicitly by profile edit/delete.
-                // Do not delete files during cloud restore: stale/older clients can
-                // send profile objects without custom-avatar fields and would wipe
-                // the cached photo before a newer payload can restore it.
-                return@withContext
-            }
-
+            if (profile.avatarImageVersion <= 0L || inlineBase64.isNullOrBlank()) return@withContext
             val file = ProfileAvatarFiles.localFile(context, profile) ?: return@withContext
             if (file.exists() && file.length() > 0L) return@withContext
-
-            val resolvedInlineBase64 = inlineBase64
-                ?.takeIf { it.isNotBlank() }
-                ?: loadInlineAvatarFromCloud(profile.id)
-
-            if (!resolvedInlineBase64.isNullOrBlank()) {
-                try {
-                    val bytes = Base64.decode(resolvedInlineBase64, Base64.NO_WRAP)
-                    file.writeBytes(bytes)
-                    ProfileAvatarFiles.cleanupProfile(context, profile.id, keepVersion = profile.avatarImageVersion)
-                    return@withContext
-                } catch (e: IllegalArgumentException) {
-                    com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Base64 decode error: ${e.message}")
-                } catch (e: java.io.IOException) {
-                    com.arflix.tv.util.AppLogger.e("ProfileAvatar", "IO error writing avatar: ${e.message}")
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Unexpected error restoring avatar: ${e.message}")
-                }
-            }
-
-            val storagePath = profile.avatarImageStoragePath?.trim().orEmpty()
-            if (storagePath.isBlank()) return@withContext
-            downloadAvatar(storagePath, file).onSuccess {
+            try {
+                file.writeBytes(Base64.decode(inlineBase64, Base64.NO_WRAP))
                 ProfileAvatarFiles.cleanupProfile(context, profile.id, keepVersion = profile.avatarImageVersion)
+            } catch (e: Exception) {
+                com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Error restoring avatar: ${e.message}")
             }
         }
 
+    // ADIK: stub, removed with cloud sync
+    @Suppress("UNUSED_PARAMETER")
     fun buildInlineAvatarImagesJson(
         profiles: List<Profile>,
         existingImagesById: JSONObject? = null
-    ): JSONObject {
-        val result = JSONObject()
-        profiles
-            .filter { it.avatarImageVersion > 0L }
-            .forEach { profile ->
-                val localImage = readInlineBase64(profile)
-                val preservedImage = existingImagesById
-                    ?.optString(profile.id)
-                    ?.takeIf { it.isNotBlank() }
-                val image = localImage ?: preservedImage
-                if (!image.isNullOrBlank()) {
-                    result.put(profile.id, image)
-                }
-            }
-        return result
-    }
-
-    fun readInlineBase64(profile: Profile): String? {
-        val file = ProfileAvatarFiles.localFile(context, profile) ?: return null
-        if (!file.exists() || file.length() <= 0L) return null
-        return try { Base64.encodeToString(file.readBytes(), Base64.NO_WRAP) } catch (e: Exception) { null }
-    }
+    ): JSONObject = JSONObject()
 
     fun clearLocalAvatar(profileId: String) {
         ProfileAvatarFiles.cleanupProfile(context, profileId)
@@ -150,97 +95,11 @@ class ProfileAvatarImageManager @Inject constructor(
 
     private fun calculateSampleSize(width: Int, height: Int, target: Int): Int {
         var sample = 1
-        var halfWidth = width / 2
-        var halfHeight = height / 2
+        val halfWidth = width / 2
+        val halfHeight = height / 2
         while (halfWidth / sample >= target && halfHeight / sample >= target) {
             sample *= 2
         }
         return sample.coerceAtLeast(1)
-    }
-
-    private suspend fun uploadAvatar(profileId: String, version: Long, file: File): Result<String> =
-        withContext(Dispatchers.IO) {
-            try {
-                if (Constants.USE_NETLIFY_CLOUD_SYNC) {
-                    error("Remote avatar storage is handled by account sync")
-                }
-                val userId = authRepository.getCurrentUserId().orEmpty()
-                val token = authRepository.getAccessToken().orEmpty()
-                if (userId.isBlank() || token.isBlank()) error(context.getString(R.string.error_not_logged_in))
-
-                val path = "$userId/$profileId/$version.jpg"
-                val request = Request.Builder()
-                    .url("${Constants.SUPABASE_URL.trimEnd('/')}/storage/v1/object/$BUCKET/$path")
-                    .header("apikey", Constants.SUPABASE_ANON_KEY)
-                    .header("Authorization", "Bearer $token")
-                    .header("Content-Type", "image/jpeg")
-                    .header("cache-control", "31536000")
-                    .header("x-upsert", "true")
-                    .post(file.asRequestBody("image/jpeg".toMediaType()))
-                    .build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) error(context.getString(R.string.avatar_upload_failed, response.code))
-                }
-                Result.success(path)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: java.io.IOException) {
-                Result.failure(e)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-
-    private suspend fun downloadAvatar(storagePath: String, destination: File): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            try {
-                if (Constants.USE_NETLIFY_CLOUD_SYNC) {
-                    error("Remote avatar storage is handled by account sync")
-                }
-                val token = authRepository.getAccessToken().orEmpty()
-                if (token.isBlank()) error(context.getString(R.string.error_not_logged_in))
-                val request = Request.Builder()
-                    .url("${Constants.SUPABASE_URL.trimEnd('/')}/storage/v1/object/$BUCKET/$storagePath")
-                    .header("apikey", Constants.SUPABASE_ANON_KEY)
-                    .header("Authorization", "Bearer $token")
-                    .get()
-                    .build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) error(context.getString(R.string.avatar_download_failed, response.code))
-                    val bytes = response.body?.bytes() ?: error(context.getString(R.string.avatar_response_empty))
-                    destination.writeBytes(bytes)
-                }
-                Result.success(Unit)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: java.io.IOException) {
-                Result.failure(e)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-
-    private suspend fun loadInlineAvatarFromCloud(profileId: String): String? {
-        return authRepository.loadAccountSyncPayload().getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { payload ->
-                try {
-                    JSONObject(payload)
-                        .optJSONObject("profileAvatarImagesById")
-                        ?.optString(profileId)
-                        ?.takeIf { it.isNotBlank() }
-                } catch (e: org.json.JSONException) {
-                    com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Error parsing inline avatar JSON: ${e.message}")
-                    null
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    com.arflix.tv.util.AppLogger.e("ProfileAvatar", "Unexpected error parsing inline avatar: ${e.message}")
-                    null
-                }
-            }
-    }
-
-    private companion object {
-        const val BUCKET = "profile-avatars"
     }
 }
