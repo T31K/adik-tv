@@ -285,24 +285,6 @@ class MediaRepository @Inject constructor(
         return CategoryPageResult(cat?.items ?: emptyList(), hasMore = false)
     }
 
-    // ADIK: stub, removed with home server
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun loadHomeServerLibraryPage(
-        sourceRef: String,
-        offset: Int,
-        limit: Int,
-        sort: HomeServerLibrarySort = HomeServerLibrarySort.RECENTLY_ADDED,
-        mediaType: MediaType? = null,
-        searchQuery: String = ""
-    ): CategoryPageResult = CategoryPageResult(emptyList(), hasMore = false)
-
-    // ADIK: stub, removed with collections
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun loadCollectionCatalogPage(
-        catalog: CatalogConfig,
-        offset: Int,
-        limit: Int
-    ): CategoryPageResult = CategoryPageResult(emptyList(), hasMore = false)
 
     // ---- TMDB metadata --------------------------------------------------------
 

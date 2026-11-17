@@ -204,22 +204,6 @@ class CatalogRepository @Inject constructor(
         }
     }
 
-    // ADIK: stub, removed with addons
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun getHiddenAddonCatalogIdsForProfile(profileId: String): List<String> = emptyList()
-
-    // ADIK: stub, removed with addons
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun setHiddenAddonCatalogIdsForProfile(profileId: String, ids: List<String>) = Unit
-
-    // ADIK: stub, removed with home server
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun getHiddenHomeServerCatalogIdsForProfile(profileId: String): List<String> = emptyList()
-
-    // ADIK: stub, removed with home server
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun setHiddenHomeServerCatalogIdsForProfile(profileId: String, ids: List<String>) = Unit
-
     private suspend fun saveArrangement(profileId: String, rows: List<CatalogConfig>) {
         val compact = rows.distinctBy { it.id }.map { row(it.id, it.title) }
         context.settingsDataStore.edit { prefs ->
@@ -237,39 +221,6 @@ class CatalogRepository @Inject constructor(
     @Suppress("UNUSED_PARAMETER")
     suspend fun ensurePreinstalledDefaults(defaultPreinstalled: List<CatalogConfig>): List<CatalogConfig> =
         getCatalogs()
-
-    // ADIK: stub, removed with addons
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun syncAddonCatalogs(addons: List<Addon>): Boolean = false
-
-    // ADIK: stub, removed with home server
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun syncHomeServerCatalogs(candidates: List<HomeServerCatalogCandidate>): Boolean = false
-
-    // ADIK: stub, removed with catalog packs
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun fetchCatalogPackManifest(packUrl: String): Result<CatalogPackManifest> =
-        Result.failure(CatalogException(R.string.catalog_url_invalid))
-
-    // ADIK: stub, removed with catalog packs
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun addCatalogPack(packUrl: String, manifest: CatalogPackManifest? = null): Result<CatalogPackManifest> =
-        Result.failure(CatalogException(R.string.catalog_url_invalid))
-
-    // ADIK: stub, removed with catalog packs
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun removeCatalogPack(packId: String): Result<Unit> =
-        Result.failure(CatalogException(R.string.catalog_not_found))
-
-    // ADIK: stub, removed with custom URL catalogs
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun addCustomCatalog(rawUrl: String): Result<CatalogConfig> =
-        Result.failure(CatalogException(R.string.catalog_url_invalid))
-
-    // ADIK: stub, removed with custom URL catalogs
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun updateCustomCatalog(catalogId: String, rawUrl: String): Result<CatalogConfig> =
-        Result.failure(CatalogException(R.string.catalog_not_found))
 
     /** Removing a feed row hides it for the active profile. */
     suspend fun removeCustomCatalog(catalogId: String): Result<Unit> {

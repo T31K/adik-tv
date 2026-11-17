@@ -19,8 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.arflix.tv.data.repository.CloudSyncScope
-import com.arflix.tv.di.RepositoryAccessEntryPoint
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
 import com.arflix.tv.ui.skin.ArvioSkin
@@ -117,7 +115,7 @@ suspend fun toggleCatalogueRowLayoutMode(
     val normalizedRowKey = normalizeCatalogueRowLayoutKey(rowKey)
     val entryPoint = EntryPointAccessors.fromApplication(
         context,
-        RepositoryAccessEntryPoint::class.java
+        CardLayoutEntryPoint::class.java
     )
     val profileId = entryPoint.profileManager().getProfileId()
     val key = profileCatalogueRowLayoutModeKey(profileId, normalizedRowKey)
@@ -128,11 +126,13 @@ suspend fun toggleCatalogueRowLayoutMode(
         val current = parseCardLayoutMode(prefs[key] ?: fallback)
         prefs[key] = toggledCardLayoutMode(current)
     }
-    entryPoint.cloudSyncInvalidationBus().markDirty(
-        CloudSyncScope.PROFILE_SETTINGS,
-        profileId,
-        "catalogue row layout"
-    )
+}
+
+/** Reads the active profile outside of Hilt-injected classes. */
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface CardLayoutEntryPoint {
+    fun profileManager(): com.arflix.tv.data.repository.ProfileManager
 }
 
 @Composable
