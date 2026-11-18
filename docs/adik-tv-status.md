@@ -153,6 +153,13 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 
 ## 8. Known gaps / next steps
 
+### Built 2026-11-18 in v0.2.2 (not yet on Mom's TV — owner away, no adb)
+- Torrent throttled to 512 KB/s (session `downloadRateLimit`) while `PlaybackState.isPlaying`; full speed after.
+- `BootReceiver` (BOOT_COMPLETED / QUICKBOOT_POWERON / MY_PACKAGE_REPLACED) starts DownloadService; the service syncs the feed itself on a cold start (10 tries, 30 s apart). Android 15+ blocks dataSync FGS from boot — there it starts on next app open.
+- Download diagnostics: `MegaflixDownload status:` log line every 30 s (progress, peers, session rate, DHT nodes, limit, playing, internal/drive) + Settings → Downloads shows "finding peers (N DHT nodes)" / "no network peers yet" / "slowed while watching".
+- Pause: VLCVideoLayout can no longer take D-pad focus; every player KeyDown logged as `VlcKeys`.
+- Next on Mom's TV: install v0.2.2, read `adb logcat -s MegaflixDownload MegaflixSync MegaflixBoot VlcKeys DownloadService`, then hide the USB popup.
+
 ### TODO for 2026-11-18 (agreed with owner 2026-11-17)
 Mom's TV = Sharp AQUOS TVX22A, `192.168.100.9:5555`, device id `MOM_63052_WS2`, armeabi-v7a, Android 14, only 4 GB app storage (1.9 GB free → internal downloads never fit; everything downloads to the drive). Screensaver + screen timeout disabled via adb (was screensaver_enabled=1, screen_off_timeout=600000).
 1. **BUG — downloads don't start on Mom's TV.** v0.2.0: DownloadService runs ("Syncing library…") but no libtorrent threads, ~1 KB/s; first queued item `.dl_eternal-sunshine-…` never progresses. Wi-Fi is fine (RSSI -62, 78 Mbps link; house internet 45 Mbps). v0.2.1 logs download/sync at warn level + `drain: start` — install it and read `adb logcat -s MegaflixDownload MegaflixSync`.

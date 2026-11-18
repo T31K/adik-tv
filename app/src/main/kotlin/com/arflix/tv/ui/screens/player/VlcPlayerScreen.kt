@@ -204,7 +204,17 @@ fun VlcPlayerScreen(
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> VLCVideoLayout(ctx).apply { keepScreenOn = true } },
+            factory = { ctx ->
+                VLCVideoLayout(ctx).apply {
+                    keepScreenOn = true
+                    // The native video view must never take D-pad focus: if it does,
+                    // OK/Play presses go to it instead of our controls (the "can't
+                    // pause" report). All keys belong to the Compose root.
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                }
+            },
             update = { layout -> viewModel.attach(layout) }
         )
         DisposableEffect(Unit) { onDispose { viewModel.detach() } }

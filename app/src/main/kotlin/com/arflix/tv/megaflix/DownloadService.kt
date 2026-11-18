@@ -25,6 +25,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class DownloadService : Service() {
     @Inject lateinit var downloadManager: MegaflixDownloadManager
+    @Inject lateinit var syncManager: MegaflixSyncManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // One drain at a time: repeated onStartCommand (every sync kicks us, and
     // START_STICKY restarts) must never race a second drain that would re-pick
@@ -38,6 +39,15 @@ class DownloadService : Service() {
         if (draining.compareAndSet(false, true)) {
             scope.launch {
                 try {
+                    // Started at boot (or restarted by the system) before anyone opened
+                    // ADIK: load the feed first. Wi-Fi can take a while after boot.
+                    if (syncManager.feedItems.value.isEmpty()) {
+                        for (attempt in 1..10) {
+                            if (syncManager.sync().isSuccess && syncManager.feedItems.value.isNotEmpty()) break
+                            android.util.Log.w("DownloadService", "cold start: feed sync attempt $attempt failed, retrying in 30 s")
+                            kotlinx.coroutines.delay(30_000)
+                        }
+                    }
                     downloadManager.drain()
                 } finally {
                     draining.set(false)

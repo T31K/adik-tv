@@ -33,6 +33,15 @@ data class TorrentProgress(
 /** How the user interrupted the active download (see Settings → Downloads). */
 enum class Interruption { PAUSE, STOP }
 
+/** Session-wide torrent numbers for the diagnostics line (see [TorrentEngine.stats]). */
+data class EngineStats(
+    val running: Boolean,
+    val dhtNodes: Long = 0L,
+    val downloadRateBps: Long = 0L,
+    val totalDownloadedBytes: Long = 0L,
+    val rateLimitBps: Int = 0
+)
+
 /** Result of a [TorrentEngine.download] call. */
 sealed class DownloadOutcome {
     // manifest is null only if the torrent's metadata had no usable v1 piece hashes.
@@ -63,6 +72,33 @@ class TorrentEngine @Inject constructor() {
     @Synchronized
     fun shutdown() {
         if (session.isRunning) session.stop()
+    }
+
+    /**
+     * Session-wide numbers for diagnostics. These are plain Java fields libtorrent4j
+     * refreshes from its periodic session-stats alert, so reading them is safe from
+     * any thread (unlike TorrentHandle calls — see the crash note below).
+     */
+    fun stats(): EngineStats =
+        if (!session.isRunning) EngineStats(running = false)
+        else EngineStats(
+            running = true,
+            dhtNodes = session.dhtNodes(),
+            downloadRateBps = session.downloadRate().coerceAtLeast(0L),
+            totalDownloadedBytes = session.stats().totalDownload().coerceAtLeast(0L),
+            rateLimitBps = runCatching { session.downloadRateLimit() }.getOrDefault(0)
+        )
+
+    /**
+     * Cap the whole session's download speed while a movie plays (0 = unlimited).
+     * A session setting, applied by libtorrent on its own network thread — never a
+     * per-torrent handle call, which is what crashed off the alert thread.
+     */
+    @Synchronized
+    fun setDownloadLimit(bytesPerSecond: Int) {
+        if (!session.isRunning) return
+        if (runCatching { session.downloadRateLimit() }.getOrNull() == bytesPerSecond) return
+        runCatching { session.downloadRateLimit(bytesPerSecond) }
     }
 
     // DISABLED (crash guard): interrupting a live torrent means calling

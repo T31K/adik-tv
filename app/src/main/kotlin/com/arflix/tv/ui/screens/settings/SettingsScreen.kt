@@ -1328,7 +1328,10 @@ private fun DownloadingCard(
             sizeText.takeIf { it.isNotBlank() },
             active?.let { formatSpeed(context, it.speedBps) },
             active?.etaSeconds?.let { "${formatEta(it)} left" },
-            active?.peers?.takeIf { it > 0 }?.let { "$it peers" }
+            active?.peers?.takeIf { it > 0 }?.let { "$it peers" },
+            // Diagnostics while it's not moving: is the TV reaching the BitTorrent network at all?
+            active?.takeIf { it.peers == 0 }?.let { if (it.dhtNodes > 0) "finding peers (${it.dhtNodes} DHT nodes)" else "no network peers yet" },
+            active?.takeIf { it.throttled }?.let { "slowed while watching" }
         ).joinToString("  ·  ")
         Text(
             text = detail.ifBlank { "Connecting…" },

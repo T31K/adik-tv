@@ -37,7 +37,9 @@ data class ActiveDownload(
     val speedBps: Long,         // bytes/second
     val downloadedBytes: Long,  // bytes done so far
     val etaSeconds: Long?,      // null when unknown (no rate yet)
-    val peers: Int
+    val peers: Int,
+    val dhtNodes: Long = 0L,    // 0 = the TV can't reach the BitTorrent network
+    val throttled: Boolean = false // slowed down because a movie is playing
 )
 
 /** Thrown when a drive copy is cut short because playback started. */
@@ -74,6 +76,20 @@ class MegaflixDownloadManager @Inject constructor(
     private val moveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val moveMutex = Mutex()
     private val moveJobs = ConcurrentHashMap<String, Job>()
+
+    private val _engineStats = MutableStateFlow(EngineStats(running = false))
+    /** Session-wide torrent stats (DHT nodes, total speed), refreshed while downloading. */
+    val engineStats: StateFlow<EngineStats> = _engineStats.asStateFlow()
+
+    init {
+        // While a movie plays, slow any running torrent right down so its writes
+        // don't keep the drive's head busy; full speed again when playback ends.
+        moveScope.launch {
+            playbackState.isPlaying.collect { playing -> engine.setDownloadLimit(limitFor(playing)) }
+        }
+    }
+
+    private fun limitFor(playing: Boolean): Int = if (playing) PLAYBACK_DOWNLOAD_LIMIT_BPS else 0
 
     private val internalRoot: File get() = File(context.filesDir, INTERNAL_DIR)
 
@@ -122,6 +138,34 @@ class MegaflixDownloadManager @Inject constructor(
 
         store.putAll(listOf(DownloadRecord(id, DownloadStatus.DOWNLOADING, null, 0f, feedItem.sizeBytes, linkIndex)))
         _activeDownload.value = ActiveDownload(id, 0f, 0L, 0L, null, 0)
+        // The playback throttle only fires on changes; apply it to a fresh session too.
+        engine.ensureStarted()
+        engine.setDownloadLimit(limitFor(playbackState.isPlaying.value))
+        // Heartbeat: one status line every 30 s (warn level survives release builds)
+        // so a stuck torrent shows why — no peers, no DHT, or throttled.
+        val heartbeat = moveScope.launch {
+            var tick = 0
+            while (true) {
+                kotlinx.coroutines.delay(5_000)
+                val s = engine.stats()
+                _engineStats.value = s
+                _activeDownload.value = _activeDownload.value?.let { cur ->
+                    cur.copy(
+                        dhtNodes = s.dhtNodes,
+                        throttled = s.rateLimitBps > 0,
+                        // No piece alerts yet (still finding peers/metadata): show the session rate.
+                        speedBps = if (cur.speedBps > 0L) cur.speedBps else s.downloadRateBps
+                    )
+                }
+                if (tick++ % 6 == 0) {
+                    val a = _activeDownload.value
+                    Log.w(TAG, "status: $id link[$linkIndex] ${"%.1f".format((a?.progress ?: 0f) * 100)}% " +
+                        "peers=${a?.peers ?: 0} rate=${s.downloadRateBps / 1024}KB/s dht=${s.dhtNodes} " +
+                        "limit=${s.rateLimitBps / 1024}KB/s total=${s.totalDownloadedBytes / 1_048_576}MB " +
+                        "playing=${playbackState.isPlaying.value} dir=${if (internal) "internal" else "drive"}")
+                }
+            }
+        }
         return try {
             var lastPersisted = 0f
             var lastProgress = 0f
@@ -134,7 +178,10 @@ class MegaflixDownloadManager @Inject constructor(
                     speedBps = tp.downloadRateBps,
                     downloadedBytes = tp.downloadedBytes,
                     etaSeconds = etaSeconds(feedItem.sizeBytes, tp.downloadedBytes, tp.downloadRateBps),
-                    peers = tp.peers
+                    peers = tp.peers,
+                    // Keep the heartbeat's session numbers between its 5 s refreshes.
+                    dhtNodes = _activeDownload.value?.dhtNodes ?: 0L,
+                    throttled = _activeDownload.value?.throttled ?: false
                 )
                 // Throttle DataStore writes: persist at most every ~1% (and at completion).
                 if (tp.progress - lastPersisted >= 0.01f || tp.progress >= 1f) {
@@ -170,6 +217,7 @@ class MegaflixDownloadManager @Inject constructor(
             store.putAll(listOf(DownloadRecord(id, DownloadStatus.FAILED, null, 0f, feedItem.sizeBytes, linkIndex)))
             true // keep draining; the failed item will retry on a later cycle
         } finally {
+            heartbeat.cancel()
             _activeDownload.value = null
         }
     }
@@ -638,6 +686,8 @@ class MegaflixDownloadManager @Inject constructor(
         private const val INTERNAL_DIR = "dl"
         /** Room left on internal storage beyond the item itself before we use it. */
         private const val INTERNAL_HEADROOM_BYTES = 1L * 1024 * 1024 * 1024 // 1 GB
+        /** Torrent speed cap while a movie plays: few drive writes, playback undisturbed. */
+        private const val PLAYBACK_DOWNLOAD_LIMIT_BPS = 512 * 1024
         private const val DEFAULT_COPY_BUFFER = 1 shl 20 // 1 MB
         private const val METADATA_TIMEOUT_SEC = 45
     }
