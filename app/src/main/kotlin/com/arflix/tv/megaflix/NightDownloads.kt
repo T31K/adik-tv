@@ -22,7 +22,7 @@ import java.util.Calendar
 object NightDownloads {
     const val START_HOUR = 3
     const val END_HOUR = 7
-    private const val RECHECK_MINUTES = 30
+    private const val RECHECK_MINUTES = 15
     private const val TAG = "NightDownloads"
     private const val REQUEST_CODE = 4202
 

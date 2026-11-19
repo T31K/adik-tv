@@ -26,6 +26,8 @@ import javax.inject.Inject
 class DownloadService : Service() {
     @Inject lateinit var downloadManager: MegaflixDownloadManager
     @Inject lateinit var syncManager: MegaflixSyncManager
+    @Inject lateinit var torrentEngine: TorrentEngine
+    @Inject lateinit var driveManager: DriveManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // One drain at a time: repeated onStartCommand (every sync kicks us, and
     // START_STICKY restarts) must never race a second drain that would re-pick
@@ -44,6 +46,12 @@ class DownloadService : Service() {
                 // mid-download). Released as soon as the queue is done.
                 val locks = AwakeLocks.acquire(this@DownloadService)
                 try {
+                    // Dry run (flag file set over adb): prove night downloads would work,
+                    // without downloading anything or touching the drive.
+                    if (night && NightProbe.requested()) {
+                        NightProbe.run(this@DownloadService, torrentEngine, driveManager.mediaDir())
+                        return@launch
+                    }
                     // Started at boot / by the night alarm / restarted by the system
                     // before anyone opened ADIK: load the feed first (at night always
                     // re-sync, to pick up the day's new movies). Wi-Fi can take a while.

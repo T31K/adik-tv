@@ -36,15 +36,15 @@ class NightDownloadsTest {
     }
 
     @Test
-    fun insideWindowRechecksInThirtyMinutes() {
+    fun insideWindowRechecksInFifteenMinutes() {
         val next = NightDownloads.nextTrigger(at(20, 4, 10)).toCal()
         assertThat(next.get(Calendar.HOUR_OF_DAY)).isEqualTo(4)
-        assertThat(next.get(Calendar.MINUTE)).isEqualTo(40)
+        assertThat(next.get(Calendar.MINUTE)).isEqualTo(25)
     }
 
     @Test
     fun lastCheckRollsOverToTomorrow() {
-        val next = NightDownloads.nextTrigger(at(20, 6, 45)).toCal()
+        val next = NightDownloads.nextTrigger(at(20, 6, 50)).toCal()
         assertThat(next.get(Calendar.DAY_OF_MONTH)).isEqualTo(21)
         assertThat(next.get(Calendar.HOUR_OF_DAY)).isEqualTo(3)
     }
