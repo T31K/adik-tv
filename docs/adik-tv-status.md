@@ -160,6 +160,12 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - Pause: VLCVideoLayout can no longer take D-pad focus; every player KeyDown logged as `VlcKeys`.
 - Next on Mom's TV: install v0.2.2, read `adb logcat -s MegaflixDownload MegaflixSync MegaflixBoot VlcKeys DownloadService`, then hide the USB popup.
 
+### ⚠️ State as of 2026-11-19 evening
+- **The ADIK drive currently plugged into Mom's TV is BROKEN** (failing HDD — kernel `I/O error, dev sda … READ` on the TV, VLC "Error while reading SimpleBlock"; Moana/Toy Story 5 unplayable; 6 USB drops on the Mac). 29/73 of her movies on it; `.bad/28_years_later_2025.mkv` plugs one bad area. **A replacement drive arrives 2026-11-20** → format FAT32 `ADIK`, seed all 73 with `seed_drive.py`, swap it in.
+- Any download/playback failure on her TV before the swap is the drive, not the app.
+- Her TV: v0.2.3 installed 2026-11-19; v0.2.4 (night downloads) installing. `low_power_standby_enabled` set to 0 via adb (was 1). Standby test: with it off, the TV dark-wakes every ~2–3 min on system alarms with Wi-Fi up → wake-up alarms work with the screen off.
+- Network adb turns off when the TV is fully powered off; re-enable USB debugging in Developer options and accept the prompt.
+
 ### Next session on Mom's TV (owner turns it on, 2026-11-19+)
 1. Install v0.2.3 (adb), read download/pause logs, hide the USB popup.
 2. **Standby test for night downloads (screen off):** turn the TV off with the remote, check `adb connect 192.168.100.9:5555` still answers (= SoC asleep, not powered off; look for a "Quick start"/"Network standby" setting if not). If it sleeps: build a nightly `AlarmManager.setExactAndAllowWhileIdle(RTC_WAKEUP)` window (~2–5 am) that starts DownloadService with a partial wake lock + Wi-Fi lock, screen stays off, releases when the queue is empty.
