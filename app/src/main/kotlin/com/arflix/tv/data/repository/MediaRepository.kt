@@ -291,9 +291,14 @@ class MediaRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             null
         } ?: return emptyList()
+        // Only the franchise films this TV's library has (with their download state),
+        // in release order — TMDB lists every film in the collection.
+        val library = megaflixLibrary.libraryItems(MediaType.MOVIE)
+            .filter { it.downloadStatus == com.arflix.tv.data.model.DownloadStatus.READY }
+            .associateBy { it.id }
         return response.parts
             .sortedBy { it.releaseDate.orEmpty() }
-            .map { it.toMediaItem(MediaType.MOVIE) }
+            .mapNotNull { library[it.id] }
     }
 
     /** Season episodes from TMDB, with watched flags from local playback progress. */
@@ -337,13 +342,15 @@ class MediaRepository @Inject constructor(
     /**
      * "More Like This", drawn only from this TV's library: first the library titles
      * TMDB recommends for this one (in TMDB's order), then library titles sharing the
-     * most genres. Downloaded titles come before ones still coming.
+     * most genres. Only titles that are downloaded and ready to play.
      */
     suspend fun getSimilar(mediaType: MediaType, mediaId: Int): List<MediaItem> {
         val cacheKey = "${mediaType}_similar_$mediaId"
         getFromCache(similarCache, cacheKey)?.let { return it }
 
-        val library = megaflixLibrary.libraryItems(mediaType).filter { it.id != mediaId }
+        // Only movies on the drive and ready to play.
+        val library = megaflixLibrary.libraryItems(mediaType)
+            .filter { it.id != mediaId && it.downloadStatus == com.arflix.tv.data.model.DownloadStatus.READY }
         if (library.isEmpty()) return emptyList()
 
         val type = if (mediaType == MediaType.TV) "tv" else "movie"
@@ -364,7 +371,6 @@ class MediaRepository @Inject constructor(
         val genres = (library.firstOrNull { it.id == mediaId }?.genreIds
             ?: runCatching { getMovieGenres(type, mediaId) }.getOrDefault(emptyList())).toSet()
 
-        val ready = { item: MediaItem -> item.downloadStatus == com.arflix.tv.data.model.DownloadStatus.READY }
         val result = library
             .map { item -> item to (rank[item.id] to item.genreIds.count { it in genres }) }
             .filter { (_, s) -> s.first != null || s.second > 0 }
@@ -372,10 +378,8 @@ class MediaRepository @Inject constructor(
                 compareBy<Pair<MediaItem, Pair<Int?, Int>>> { (_, s) -> if (s.first != null) 0 else 1 }
                     .thenBy { (_, s) -> s.first ?: Int.MAX_VALUE }
                     .thenByDescending { (_, s) -> s.second }
-                    .thenBy { (item, _) -> if (ready(item)) 0 else 1 }
             )
             .map { it.first }
-            .sortedBy { if (ready(it)) 0 else 1 } // stable: keeps relevance order within each group
             .take(12)
         similarCache[cacheKey] = CacheEntry(result, System.currentTimeMillis())
         return result

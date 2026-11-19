@@ -466,9 +466,11 @@ class DetailsViewModel @Inject constructor(
                                 collectionName = collectionRef.name
                             )
                         }
-                        val items = runCatching {
+                        // Library-only; a row holding just this movie is no row at all.
+                        val items = (runCatching {
                             mediaRepository.getTmdbCollectionItems(collectionRef.id)
-                        }.getOrNull() ?: emptyList()
+                        }.getOrNull() ?: emptyList())
+                            .takeIf { list -> list.any { it.id != mediaId } } ?: emptyList()
                         updateState { state ->
                             if (state.collectionId == collectionRef.id) {
                                 state.copy(collectionItems = items)
