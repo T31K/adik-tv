@@ -2108,7 +2108,8 @@ internal fun HomeInputLayer(
         if (showProfileMenu) {
             onShowProfileMenuChange(false)
         } else if (focusState.isSidebarFocused) {
-            onExitApp()
+            // Already at the top bar: stay in ADIK. Back never exits from Home
+            // (too easy to hit by accident); the remote's Home button leaves the app.
         } else {
             categories.getOrNull(focusState.currentRowIndex)?.id?.let { categoryId ->
                 focusState.rowItemIndicesByCategoryId[categoryId] = focusState.currentItemIndex
