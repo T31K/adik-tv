@@ -160,6 +160,13 @@ Postgres (Coolify, same VPS; access from the Mac via the `db` shell function →
 - Pause: VLCVideoLayout can no longer take D-pad focus; every player KeyDown logged as `VlcKeys`.
 - Next on Mom's TV: install v0.2.2, read `adb logcat -s MegaflixDownload MegaflixSync MegaflixBoot VlcKeys DownloadService`, then hide the USB popup.
 
+### Next session on Mom's TV (owner turns it on, 2026-11-19+)
+1. Install v0.2.3 (adb), read download/pause logs, hide the USB popup.
+2. **Standby test for night downloads (screen off):** turn the TV off with the remote, check `adb connect 192.168.100.9:5555` still answers (= SoC asleep, not powered off; look for a "Quick start"/"Network standby" setting if not). If it sleeps: build a nightly `AlarmManager.setExactAndAllowWhileIdle(RTC_WAKEUP)` window (~2–5 am) that starts DownloadService with a partial wake lock + Wi-Fi lock, screen stays off, releases when the queue is empty.
+3. App: auto-switch a stalled torrent to the next link after ~5 min (single-thread libtorrent funnel) — Eternal Sunshine's dead BONE torrent blocked her whole queue.
+4. One-time: update existing feed items' `links` to the re-picked healthy torrents (prod UPDATE — ask first). Picker: live tracker-scrape seeder counts.
+5. Drive: the Ugreen 2.5" enclosure browns out at ~40 MB/s sustained writes (3 drops on 2026-11-19 at 3–4 parallel); stable at 2×5 MB/s. Recommend powered USB hub or portable SSD.
+
 ### TODO for 2026-11-18 (agreed with owner 2026-11-17)
 Mom's TV = Sharp AQUOS TVX22A, `192.168.100.9:5555`, device id `MOM_63052_WS2`, armeabi-v7a, Android 14, only 4 GB app storage (1.9 GB free → internal downloads never fit; everything downloads to the drive). Screensaver + screen timeout disabled via adb (was screensaver_enabled=1, screen_off_timeout=600000).
 1. **BUG — downloads don't start on Mom's TV.** v0.2.0: DownloadService runs ("Syncing library…") but no libtorrent threads, ~1 KB/s; first queued item `.dl_eternal-sunshine-…` never progresses. Wi-Fi is fine (RSSI -62, 78 Mbps link; house internet 45 Mbps). v0.2.1 logs download/sync at warn level + `drain: start` — install it and read `adb logcat -s MegaflixDownload MegaflixSync`.
