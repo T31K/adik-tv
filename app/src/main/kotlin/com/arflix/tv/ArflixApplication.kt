@@ -56,6 +56,8 @@ class ArflixApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         instance = this
         com.arflix.tv.util.NavSound.init(this) // ADIK: preload UI hover sound
+        // ADIK: arm the 3–7 am screen-off download window (re-armed on boot and each firing).
+        com.arflix.tv.megaflix.NightDownloads.scheduleNext(this)
 
         DiagnosticsManager.initialize(this)
 

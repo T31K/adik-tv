@@ -17,6 +17,8 @@ class BootReceiver : BroadcastReceiver() {
             action != Intent.ACTION_MY_PACKAGE_REPLACED &&
             action != ACTION_QUICKBOOT_POWERON
         ) return
+        // Alarms don't survive a reboot or an app update: re-arm the night window.
+        NightDownloads.scheduleNext(context)
         if (!StoragePermission.hasAllFilesAccess()) {
             Log.w(TAG, "boot: no storage access yet, not starting downloads")
             return

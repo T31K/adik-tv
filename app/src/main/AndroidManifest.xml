@@ -16,6 +16,11 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <!-- Megaflix: start the download queue when the TV boots, without opening the app. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Megaflix: 3–7 am downloads with the screen off (wake-up alarm + Wi-Fi lock). -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Megaflix: scan local video files for the "My Library" catalog. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -52,6 +57,11 @@
             android:name=".megaflix.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Megaflix: night-window alarm (3–7 am, screen off) → start the download queue. -->
+        <receiver
+            android:name=".megaflix.NightDownloadReceiver"
+            android:exported="false" />
 
         <!-- Megaflix: boot / app-update → resume downloads without opening ADIK. -->
         <receiver

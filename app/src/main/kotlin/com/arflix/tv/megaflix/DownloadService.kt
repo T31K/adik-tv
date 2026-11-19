@@ -36,12 +36,18 @@ class DownloadService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification("Syncing library…"))
+        val night = intent?.getBooleanExtra(EXTRA_NIGHT, false) == true
         if (draining.compareAndSet(false, true)) {
             scope.launch {
+                // Keep the CPU and Wi-Fi awake while downloading, even if the TV is
+                // in standby with the screen off (night window, or turned off
+                // mid-download). Released as soon as the queue is done.
+                val locks = AwakeLocks.acquire(this@DownloadService)
                 try {
-                    // Started at boot (or restarted by the system) before anyone opened
-                    // ADIK: load the feed first. Wi-Fi can take a while after boot.
-                    if (syncManager.feedItems.value.isEmpty()) {
+                    // Started at boot / by the night alarm / restarted by the system
+                    // before anyone opened ADIK: load the feed first (at night always
+                    // re-sync, to pick up the day's new movies). Wi-Fi can take a while.
+                    if (night || syncManager.feedItems.value.isEmpty()) {
                         for (attempt in 1..10) {
                             if (syncManager.sync().isSuccess && syncManager.feedItems.value.isNotEmpty()) break
                             android.util.Log.w("DownloadService", "cold start: feed sync attempt $attempt failed, retrying in 30 s")
@@ -50,6 +56,7 @@ class DownloadService : Service() {
                     }
                     downloadManager.drain()
                 } finally {
+                    locks.release()
                     draining.set(false)
                     stopSelf()
                 }
@@ -86,8 +93,10 @@ class DownloadService : Service() {
         private const val CHANNEL_ID = "megaflix_downloads"
         private const val NOTIF_ID = 4201
 
-        fun start(context: Context) {
-            val intent = Intent(context, DownloadService::class.java)
+        const val EXTRA_NIGHT = "night"
+
+        fun start(context: Context, night: Boolean = false) {
+            val intent = Intent(context, DownloadService::class.java).putExtra(EXTRA_NIGHT, night)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
