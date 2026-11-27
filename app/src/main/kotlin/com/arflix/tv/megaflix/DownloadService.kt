@@ -103,7 +103,16 @@ class DownloadService : Service() {
 
         const val EXTRA_NIGHT = "night"
 
+        /**
+         * Torrent downloads are switched off in the streaming build (movies stream from R2).
+         * Every start path (sync, boot, night alarm, heal poller) goes through [start], so this
+         * one switch stops all of them. On a TV without a USB drive the downloader fell back to
+         * internal storage and filled it (living-room TCL, 2026-11-27).
+         */
+        const val DOWNLOADS_ENABLED = false
+
         fun start(context: Context, night: Boolean = false) {
+            if (!DOWNLOADS_ENABLED) return
             val intent = Intent(context, DownloadService::class.java).putExtra(EXTRA_NIGHT, night)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
