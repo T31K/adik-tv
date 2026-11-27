@@ -701,6 +701,38 @@ private fun settingsItems(
                 actionLabel = uiState.megaflixDeviceId ?: "SET",
                 onActivate = onEditDeviceId
             ),
+            when (val s = uiState.streamState) {
+                is com.arflix.tv.stream.PairState.Pending -> SettingsItem.Action(
+                    title = "Streaming",
+                    description = "Waiting for approval · Code ${com.arflix.tv.stream.StreamIds.display(s.code)} · ${s.deviceId}",
+                    actionLabel = "CHECK",
+                    onActivate = { viewModel.refreshStream() }
+                )
+                is com.arflix.tv.stream.PairState.Approved -> SettingsItem.Action(
+                    title = "Streaming",
+                    description = "Connected · ${s.deviceId}",
+                    actionLabel = "ON",
+                    onActivate = { viewModel.refreshStream() }
+                )
+                is com.arflix.tv.stream.PairState.Revoked -> SettingsItem.Action(
+                    title = "Streaming",
+                    description = "Turned off for this TV · ${s.deviceId}",
+                    actionLabel = "OFF",
+                    onActivate = { viewModel.refreshStream() }
+                )
+                is com.arflix.tv.stream.PairState.Failed -> SettingsItem.Action(
+                    title = "Streaming",
+                    description = "Can't reach the stream server right now",
+                    actionLabel = "RETRY",
+                    onActivate = { viewModel.refreshStream() }
+                )
+                com.arflix.tv.stream.PairState.Unknown -> SettingsItem.Action(
+                    title = "Streaming",
+                    description = "Setting up this TV's streaming keys",
+                    actionLabel = "CHECK",
+                    onActivate = { viewModel.refreshStream() }
+                )
+            },
             SettingsItem.Action(
                 title = stringResource(R.string.app_update),
                 description = when {

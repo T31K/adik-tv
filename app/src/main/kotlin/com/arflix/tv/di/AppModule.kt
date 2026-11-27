@@ -67,4 +67,16 @@ object AppModule {
             .build()
             .create(MegaflixFeedApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    @JvmStatic
+    fun provideStreamApi(okHttpClient: OkHttpClient): com.arflix.tv.stream.StreamApi {
+        return Retrofit.Builder()
+            .baseUrl(Constants.MEGAFLIX_FEED_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(com.arflix.tv.stream.StreamApi::class.java)
+    }
 }

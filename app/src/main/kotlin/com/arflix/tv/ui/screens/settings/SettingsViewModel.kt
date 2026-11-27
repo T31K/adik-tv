@@ -92,6 +92,8 @@ data class DownloadsUi(
 data class SettingsUiState(
     /** Which family TV this is; sent to the feed. Null = not set. */
     val megaflixDeviceId: String? = null,
+    /** ADIK Stream pairing (R2 streaming): pending shows the code to approve on the Mac. */
+    val streamState: com.arflix.tv.stream.PairState = com.arflix.tv.stream.PairState.Unknown,
     val downloads: DownloadsUi = DownloadsUi(),
     /** libVLC subtitle style + preferred audio/subtitle languages (device-wide). */
     val player: PlayerPrefsValues = PlayerPrefsValues(),
@@ -130,7 +132,8 @@ class SettingsViewModel @Inject constructor(
     private val megaflixStore: DownloadStateStore,
     private val megaflixDownloadManager: MegaflixDownloadManager,
     private val megaflixSyncManager: MegaflixSyncManager,
-    private val playbackState: PlaybackState
+    private val playbackState: PlaybackState,
+    private val streamCatalog: com.arflix.tv.stream.StreamCatalog
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -154,6 +157,9 @@ class SettingsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(megaflixDeviceId = id)
             }
         }
+        viewModelScope.launch {
+            streamCatalog.state.collect { s -> _uiState.value = _uiState.value.copy(streamState = s) }
+        }
         observeProfileChanges()
         observePlayerPrefs()
         observeDownloads()
@@ -164,6 +170,11 @@ class SettingsViewModel @Inject constructor(
     // ── Accounts: device id ──────────────────────────────────────────────
 
     /** The owner types this TV's fleet id once (valid list lives server-side). */
+    /** Re-check pairing with the stream server (e.g. right after approving the code on the Mac). */
+    fun refreshStream() {
+        viewModelScope.launch { streamCatalog.refresh() }
+    }
+
     fun setMegaflixDeviceId(raw: String) {
         viewModelScope.launch {
             val id = raw.trim().takeIf { it.isNotBlank() }

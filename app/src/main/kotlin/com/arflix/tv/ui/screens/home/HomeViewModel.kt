@@ -106,6 +106,7 @@ class HomeViewModel @Inject constructor(
     private val megaflixLibrary: MegaflixLibraryBuilder,
     private val megaflixSyncManager: MegaflixSyncManager,
     private val megaflixDownloadManager: MegaflixDownloadManager,
+    private val streamCatalog: com.arflix.tv.stream.StreamCatalog,
     private val appUpdateRepository: AppUpdateRepository,
     private val apkDownloader: ApkDownloader,
     private val updatePreferences: UpdatePreferences,
@@ -271,6 +272,8 @@ class HomeViewModel @Inject constructor(
     private fun startMegaflixSync() {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { megaflixSyncManager.sync() }
+            // Stream movies (R2, encrypted) join the library as normal entries once this TV is approved.
+            streamCatalog.refresh()
             loadHomeData()
             // After Home is up: scan new READY movies for missing pieces; broken ones
             // are deleted + re-queued, so refresh Home to drop them.
@@ -282,10 +285,10 @@ class HomeViewModel @Inject constructor(
                 // Heal stalled downloads: swap a crawling torrent to its next
                 // ranked magnet, or kick the drain if it's idle with work pending.
                 runCatching { megaflixDownloadManager.pollAndHeal() }
-                if (runCatching { megaflixSyncManager.revChanged() }.getOrDefault(false)) {
-                    runCatching { megaflixSyncManager.sync() }
-                    loadHomeData()
-                }
+                val feedChanged = runCatching { megaflixSyncManager.revChanged() }.getOrDefault(false)
+                if (feedChanged) runCatching { megaflixSyncManager.sync() }
+                val streamChanged = streamCatalog.refresh()
+                if (feedChanged || streamChanged) loadHomeData()
             }
         }
     }
