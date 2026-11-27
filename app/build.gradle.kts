@@ -30,8 +30,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 23
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.2.5"
+        versionCode = 21
+        versionName = "0.2.6-stream"
         buildConfigField("String", "GITHUB_OWNER", "\"T31K\"")
         buildConfigField("String", "GITHUB_REPO", "\"adik-tv\"")
 
