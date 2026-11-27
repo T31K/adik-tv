@@ -1,11 +1,11 @@
 # ADIK Stream — encrypted R2 streaming, readable only on paired TVs
 
-_Status: design, awaiting approval · 2026-11-27_
+_Status: approved 2026-11-27 (revised the same day: streaming goes inside the existing app)_
 
 ## 1. Intent
 
-A second version of ADIK TV that **streams movies from a private Cloudflare R2 bucket** instead of
-torrenting them onto a USB drive. The files in R2 are **encrypted chunks that only a paired TV can
+Streaming built into the existing ADIK TV app: some library entries **stream from a private Cloudflare R2 bucket**
+and play like any other movie, while the rest keep coming off the USB drive. The files in R2 are **encrypted chunks that only a paired TV can
 decrypt**: each TV holds its own private key inside Android Keystore, and that key never leaves the TV.
 
 Why (from the conversation and the project state): the USB drive on Mom's TV failed and torrent
@@ -23,7 +23,8 @@ own disc rip of *Demon Slayer: Infinity Castle* (2.3 GB, HEVC Main10 1080p, AAC 
 - One-way flow: the Mac encrypts + uploads; TVs only fetch + decrypt; nothing flows back except pairing.
 
 **Non-goals (v1)**
-- Replacing the torrent version. It stays as is on Mom's TV and the fleet (see §5, Variant).
+- Replacing the torrent path. Drive movies keep working exactly as today. The test build is installed only
+  on the living-room TCL by adb and is **not published as a GitHub release**, so no other TV self-updates to it.
 - Offline playback / caching whole movies on the TV.
 - Series/episodes (movies only first; the format works per file, so episodes come later for free).
 - Per-TV movie lists. v1 is a test on **one TV (living-room TCL)**: every approved device sees every stream
@@ -136,10 +137,17 @@ Routes (all behind the existing token + device-id stealth-404 check):
 
 Deploy: commit + push main-server `master` (Coolify auto-deploys). Stage only these files.
 
-### 5.3 TV app — new variant of `~/Projects/AdikTV`
-- **Variant:** new product flavor `stream` → applicationId `com.adik.stream`, app name "ADIK Stream".
-  It installs **next to** `com.adik.tv` and shares the UI/player code. The torrent/download/drive/night
-  code is excluded from the `stream` flavor (source sets), so the APK drops libtorrent4j.
+### 5.3 TV app — inside the existing ADIK TV app (`com.adik.tv`)
+- **No new flavor or app.** Streaming is added to the current app; the torrent/drive code stays as it is.
+- **Stream entries are normal library entries.** `StreamCatalog` items are merged into the same library
+  (home rows, details, search) as drive movies, with the same TMDB art, and **no badge or visible difference**.
+  Each library item carries an internal `source` flag (`DRIVE` | `STREAM`). The UI ignores it; only the play
+  path reads it: `DRIVE` → `file://` as today; `STREAM` → `/play` + `DecryptingProxy` URL.
+- Stream entries are never handed to the sync/download/delete logic (`SyncPlan`, `MegaflixDownloadManager`),
+  so the app never tries to download them or delete them from the drive. A stream entry always counts as "ready".
+- **Server-side separation:** stream movies live only in `adik_stream_movies`, **never** in `megaflix_items`.
+  TVs without a per-device list, and old builds that send no device id, get the whole `megaflix_items` catalog;
+  they would try to torrent a magnet-less row.
 - **`StreamKeys`**: creates or loads the RSA-3072 decrypt key and the EC P-256 signing key; runs pairing
   and attestation; shows "Waiting for approval — device <id>" until approved.
 - **`StreamCatalog`**: `GET /adik/stream/movies` → library rows (reuses TMDB art like today).
@@ -154,17 +162,17 @@ Deploy: commit + push main-server `master` (Coolify auto-deploys). Stage only th
   - On a GCM tag failure it retries that chunk once, then surfaces a playback error (never plays unverified bytes).
 - **Player:** `VlcPlayerViewModel` already accepts any `Uri` (`toVlcUri`). Pass the proxy URL.
   libVLC sees a normal seekable HTTP MKV. Turn on libVLC's network caching (~3000 ms) for this source.
-- **Updates:** the self-updater stays on, in a separate channel. Stream releases are tagged `stream-v*` in
-  `T31K/adik-tv` with an asset named `adik-stream-*.apk`. Each flavor's updater filters on its own tag
-  prefix (a `BuildConfig` field), so neither app can pull the other's APK. Torrent releases keep their current tags.
+- **Updates:** unchanged updater. The test build is installed by adb on the living-room TCL only and isn't
+  published as a release, so the fleet never sees it. Its `versionName` must stay **below** the latest published
+  release, or else the TCL's updater must be prevented from replacing it. Pick whichever keeps the test build on the TCL.
 
-### 5.4 Player redesign (both flavors) — `ui/screens/player/VlcPlayerScreen.kt`
+### 5.4 Player redesign — `ui/screens/player/VlcPlayerScreen.kt`
 The owner wants the Netflix player layout exactly (reference screenshot supplied 2026-11-27): the same
 layout and controls, using ADIK's own icons/fonts and no Netflix logo or branding. The old ARVIO
 ExoPlayer screen already had this layout (`git show 7b421ad^:app/src/main/kotlin/com/arflix/tv/ui/screens/player/PlayerScreen.kt`:
 centre rewind/play/forward cluster ~L4100, seek bar + remaining time + labeled action row ~L4144–4440,
 `PlayerIconButton`/`PlayerLabeledButton`). **Port that chrome onto the libVLC player** rather than designing from scratch.
-It's shared code, so the torrent app gets it too.
+Drive and stream movies both use it.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ ←                 Demon Slayer: Infinity Castle               │
@@ -192,7 +200,8 @@ It's shared code, so the torrent app gets it too.
    object afterwards (the owner runs the delete; see their DB/data rules).
 2. Build the encrypted format + uploader; test round-trips on the Mac.
 3. Server routes + tables; pair the living-room TCL (192.168.100.12) only.
-4. `stream` flavor on the living-room TCL; play Demon Slayer end to end; test seeks, subtitles and a long pause.
+4. adb-install the test build on the living-room TCL; Demon Slayer appears as a normal library entry; play it
+   end to end; test seeks, subtitles, a long pause, and that the drive movies still play.
 5. Mom's TV only after the owner says so (rule: no installs while she's watching).
 
 ## 7. Decided by the owner
@@ -203,9 +212,10 @@ It's shared code, so the torrent app gets it too.
 - Player = Netflix layout exactly per the reference screenshot, without the screenshot, cast and Next-episode buttons;
   reuse the old ARVIO player chrome.
 - v1 scope = test on the living-room TV only: streaming + new player + encryption. Every approved TV sees every movie.
+- Streaming lives inside the existing app. Demon Slayer is a normal library entry with no badge; an internal flag marks it as streamed.
 
 ## 8. Calls made by Claude (correct any of these)
-- Separate flavor/app (`com.adik.stream`) **alongside** the torrent app, not replacing it.
+- Stream movies stay in their own server table, out of `megaflix_items`, so fleet TVs never see them.
 - One R2 object per movie with Range reads (cheaper than one object per chunk).
 - 1 MiB chunks; 6 h presigned URLs; a localhost proxy in front of libVLC.
 - Approval by DB `UPDATE` / small CLI rather than an admin UI.
@@ -213,8 +223,8 @@ It's shared code, so the torrent app gets it too.
 - Movies only in v1.
 - Stream device ids derived from the key; approval by an 8-char pairing code shown on the TV.
 - Re-pairing creates a new pending device and never overwrites an approved key.
-- Separate `stream-v*` update channel in the same GitHub repo.
-- Netflix-layout player (ported from the old ARVIO chrome) applies to both flavors.
+- The test build is adb-only, with no GitHub release.
+- The Netflix-layout player (ported from the old ARVIO chrome) is used for drive and stream movies alike.
 
 ## 9. Left to the builder
 - Choice of embedded HTTP server (NanoHTTPD vs a hand-rolled socket server). Keep it tiny, with no new native libs.
