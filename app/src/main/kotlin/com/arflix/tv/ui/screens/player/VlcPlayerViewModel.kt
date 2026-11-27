@@ -52,6 +52,8 @@ data class VlcPlayerUiState(
     val selectedAudioId: Int = -1,
     val selectedSubtitleId: Int = -1,
     val hasNextEpisode: Boolean = false,
+    /** Series show an "Episodes" button in the controls. */
+    val isSeries: Boolean = false,
     val error: String? = null,
     val finished: Boolean = false
 )
@@ -86,7 +88,9 @@ class VlcPlayerViewModel @Inject constructor(
     private var uri: String = savedStateHandle.get<String>(ARG_URI).orEmpty()
     private var startPositionMs: Long = savedStateHandle.get<Long>(ARG_START_MS)?.takeIf { it > 0L } ?: -1L
 
-    private val _uiState = MutableStateFlow(VlcPlayerUiState(title = showTitle, subtitle = episodeLabel()))
+    private val _uiState = MutableStateFlow(
+        VlcPlayerUiState(title = showTitle, subtitle = episodeLabel(), isSeries = mediaType == MediaType.TV)
+    )
     val uiState: StateFlow<VlcPlayerUiState> = _uiState.asStateFlow()
 
     // Tiny DataStore read (already cached after app start); options are fixed per LibVLC instance.
@@ -343,7 +347,7 @@ class VlcPlayerViewModel @Inject constructor(
         streamProxyUrl = null
         startPositionMs = -1L
         softwareRetryDone = false
-        _uiState.value = VlcPlayerUiState(title = showTitle, subtitle = episodeLabel())
+        _uiState.value = VlcPlayerUiState(title = showTitle, subtitle = episodeLabel(), isSeries = true)
         viewModelScope.launch { startPlayback(resolveStartPosition(), hardware = true) }
     }
 
@@ -358,7 +362,7 @@ class VlcPlayerViewModel @Inject constructor(
     }
 
     private fun episodeLabel(): String? =
-        if (mediaType == MediaType.TV && season != null && episode != null) "Season $season · Episode $episode" else null
+        if (mediaType == MediaType.TV && season != null && episode != null) "S$season:E$episode" else null
 
     private fun startProgressLoop() {
         if (progressJob?.isActive == true) return

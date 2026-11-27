@@ -13,7 +13,20 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -82,6 +95,8 @@ fun VlcPlayerScreen(
 
     var controlsVisible by remember { mutableStateOf(true) }
     var menuOpen by remember { mutableStateOf(false) }
+    var focus by remember { mutableStateOf(ChromeFocus()) }
+    val buttons = PlayerChrome.buttons(state.isSeries)
     var interactionTick by remember { mutableIntStateOf(0) }
     var pendingSeekMs by remember { mutableStateOf<Long?>(null) }
     val rootFocus = remember { FocusRequester() }
@@ -133,6 +148,7 @@ fun VlcPlayerScreen(
         if (controlsVisible && state.isPlaying && !menuOpen) {
             delay(CONTROLS_HIDE_MS)
             controlsVisible = false
+            focus = ChromeFocus()
         }
     }
 
@@ -173,23 +189,42 @@ fun VlcPlayerScreen(
                 }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 // Diagnostics for the "can't pause" report (warn level survives release builds).
-                android.util.Log.w("VlcKeys", "key=${native.keyCode} repeat=${native.repeatCount} playing=${state.isPlaying} loading=${state.isLoading} controls=$controlsVisible")
+                android.util.Log.w("VlcKeys", "key=${native.keyCode} repeat=${native.repeatCount} playing=${state.isPlaying} loading=${state.isLoading} controls=$controlsVisible focus=$focus")
+                // D-pad goes through the Netflix-layout focus model (PlayerChrome). While the controls
+                // are hidden, OK and Left/Right still act right away; Up/Down just bring the controls up.
+                val chromeKey = when (native.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> ChromeKey.OK
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ChromeKey.LEFT
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ChromeKey.RIGHT
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> ChromeKey.UP
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ChromeKey.DOWN
+                    else -> null
+                }
+                if (chromeKey != null) {
+                    if (state.error != null) {
+                        if (chromeKey == ChromeKey.OK && native.repeatCount == 0) currentOnBack()
+                        return@onPreviewKeyEvent true
+                    }
+                    val wasHidden = !controlsVisible
+                    if (wasHidden && (chromeKey == ChromeKey.UP || chromeKey == ChromeKey.DOWN)) {
+                        focus = ChromeFocus(); poke(); return@onPreviewKeyEvent true
+                    }
+                    val from = if (wasHidden) ChromeFocus() else focus
+                    val (next, action) = PlayerChrome.onKey(from, chromeKey, buttons)
+                    focus = next
+                    when (action) {
+                        ChromeAction.TOGGLE_PLAY -> if (native.repeatCount == 0) viewModel.togglePlayPause()
+                        ChromeAction.SEEK_BACK -> stepSeek(false, native.repeatCount)
+                        ChromeAction.SEEK_FORWARD -> stepSeek(true, native.repeatCount)
+                        ChromeAction.OPEN_TRACKS -> if (native.repeatCount == 0) menuOpen = true
+                        ChromeAction.OPEN_EPISODES -> if (native.repeatCount == 0) currentOnBack()
+                        ChromeAction.NONE -> Unit
+                    }
+                    poke()
+                    return@onPreviewKeyEvent true
+                }
                 when (native.keyCode) {
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (native.repeatCount == 0) {
-                            if (state.error != null) currentOnBack() else viewModel.togglePlayPause()
-                        }
-                        poke(); true
-                    }
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { stepSeek(false, native.repeatCount); true }
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { stepSeek(true, native.repeatCount); true }
-                    AndroidKeyEvent.KEYCODE_DPAD_UP -> { poke(); true }
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (controlsVisible && native.repeatCount == 0 && state.error == null) menuOpen = true
-                        poke(); true
-                    }
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                     AndroidKeyEvent.KEYCODE_SPACE -> { viewModel.togglePlayPause(); poke(); true }
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> { viewModel.play(); poke(); true }
@@ -237,7 +272,7 @@ fun VlcPlayerScreen(
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            ControlsOverlay(state = state, pendingSeekMs = pendingSeekMs)
+            ControlsOverlay(state = state, pendingSeekMs = pendingSeekMs, focus = focus, buttons = buttons)
         }
 
         if (menuOpen) {
@@ -252,80 +287,172 @@ fun VlcPlayerScreen(
     }
 }
 
+/** Red for the played part of the bar and the knob. */
+private val PlayedRed = Color(0xFFE53935)
+
+/**
+ * Netflix-layout controls: back arrow + centred title at the top; a large play/pause in the
+ * middle with 10-second skip icons on either side; a thin bar with a red knob and the time
+ * remaining; and labeled buttons underneath. Focus comes from [PlayerChrome] (the root
+ * handles every key), so these composables only draw.
+ */
 @Composable
-private fun ControlsOverlay(state: VlcPlayerUiState, pendingSeekMs: Long?) {
+private fun ControlsOverlay(
+    state: VlcPlayerUiState,
+    pendingSeekMs: Long?,
+    focus: ChromeFocus,
+    buttons: List<ChromeButton>
+) {
     val shownPosition = pendingSeekMs ?: state.positionMs
     val duration = state.durationMs
+    val centreFocused = focus.zone == ChromeZone.CENTER
     Box(modifier = Modifier.fillMaxSize()) {
-        // Top: title
-        Column(
+        // Top: back arrow, centred title. Never a filename or URL — the title comes from the catalog.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
-                .padding(horizontal = 48.dp, vertical = 32.dp)
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
+                .padding(horizontal = 40.dp, vertical = 28.dp)
         ) {
-            Text(
-                text = state.title,
-                color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.align(Alignment.CenterStart).size(30.dp)
             )
-            state.subtitle?.let {
-                Text(text = it, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
+            Text(
+                text = listOfNotNull(state.title.takeIf { it.isNotBlank() }, state.subtitle).joinToString(" · "),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 80.dp)
+            )
+        }
+
+        // Centre: ⟲10   ▶/❚❚   10⟳ (hidden while the spinner shows)
+        if (!state.isLoading) {
+            Row(
+                modifier = Modifier.align(Alignment.Center),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(150.dp)
+            ) {
+                val sideTint = Color.White.copy(alpha = if (centreFocused) 0.9f else 0.5f)
+                Icon(Icons.Default.Replay10, contentDescription = "Back 10 seconds", tint = sideTint, modifier = Modifier.size(64.dp))
+                Box(
+                    modifier = Modifier
+                        .size(104.dp)
+                        .clip(CircleShape)
+                        .background(if (centreFocused) Color.White.copy(alpha = 0.18f) else Color.Transparent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (state.isPlaying) "Pause" else "Play",
+                        tint = Color.White.copy(alpha = if (centreFocused) 1f else 0.6f),
+                        modifier = Modifier.size(84.dp)
+                    )
+                }
+                Icon(Icons.Default.Forward10, contentDescription = "Forward 10 seconds", tint = sideTint, modifier = Modifier.size(64.dp))
             }
         }
 
-        // Bottom: progress + times
+        // Bottom: seek bar + time remaining, then the labeled buttons.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
-                .padding(horizontal = 48.dp, vertical = 32.dp)
+                .padding(start = 48.dp, end = 48.dp, top = 48.dp, bottom = 24.dp)
         ) {
-            if (!state.isPlaying && !state.isLoading) {
+            if (state.finished) {
                 Text(
-                    text = if (state.finished) "Finished · press OK to watch again" else "Paused",
+                    text = "Finished · press OK to watch again",
                     color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
             }
             val fraction = if (duration > 0L) (shownPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color.White.copy(alpha = 0.25f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .fillMaxHeight()
-                        .background(if (pendingSeekMs != null) Color(0xFFFFC107) else Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BoxWithConstraints(modifier = Modifier.weight(1f).height(40.dp)) {
+                    val knob = 18.dp
+                    val knobX = (maxWidth - knob) * fraction
+                    if (pendingSeekMs != null) {
+                        Text(
+                            text = formatTime(shownPosition),
+                            color = Color.Black,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .offset(x = (knobX - 24.dp).coerceIn(0.dp, maxWidth - 64.dp), y = (-22).dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.White)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color.White.copy(alpha = 0.3f))
+                    ) {
+                        Box(modifier = Modifier.fillMaxWidth(fraction).fillMaxHeight().background(PlayedRed))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .offset(x = knobX)
+                            .size(knob)
+                            .clip(CircleShape)
+                            .background(PlayedRed)
+                    )
+                }
+                Spacer(Modifier.width(20.dp))
+                Text(
+                    text = if (duration > 0L) formatTime((duration - shownPosition).coerceAtLeast(0L)) else "--:--",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(formatTime(shownPosition), color = Color.White, fontSize = 15.sp)
-                Text(
-                    text = "▼ Audio & subtitles" + if (state.hasNextEpisode) "   ⏭ Next episode" else "",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = if (duration > 0L) "-" + formatTime((duration - shownPosition).coerceAtLeast(0L)) else "--:--",
-                    color = Color.White,
-                    fontSize = 15.sp
-                )
+                buttons.forEachIndexed { i, b ->
+                    LabeledButton(
+                        icon = if (b == ChromeButton.EPISODES) Icons.AutoMirrored.Filled.ViewList else Icons.Default.Subtitles,
+                        label = if (b == ChromeButton.EPISODES) "Episodes" else "Audio & Subtitles",
+                        focused = focus.zone == ChromeZone.BOTTOM && focus.button == i
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun LabeledButton(icon: ImageVector, label: String, focused: Boolean) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (focused) Color.White else Color.Transparent)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = if (focused) Color.Black else Color.White, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = label,
+            color = if (focused) Color.Black else Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
     }
 }
 
