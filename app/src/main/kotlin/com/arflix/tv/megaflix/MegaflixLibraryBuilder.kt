@@ -27,7 +27,8 @@ import javax.inject.Singleton
 class MegaflixLibraryBuilder @Inject constructor(
     private val syncManager: MegaflixSyncManager,
     private val store: DownloadStateStore,
-    private val tmdbApi: TmdbApi
+    private val tmdbApi: TmdbApi,
+    private val streamCatalog: com.arflix.tv.stream.StreamCatalog
 ) {
     private val apiKey get() = Constants.TMDB_API_KEY
 
@@ -45,6 +46,7 @@ class MegaflixLibraryBuilder @Inject constructor(
     // once per feed). Invalidated automatically when the feed list is replaced (each sync).
     @Volatile private var movieCache: List<MediaItem>? = null
     @Volatile private var movieCacheFeed: List<FeedItemDto>? = null
+    @Volatile private var movieCacheStream: List<com.arflix.tv.stream.StreamMovieDto>? = null
 
     /** Synchronous per-episode file lookup for the player. Null if not downloaded. */
     fun cachedEpisodePath(tmdbId: Int, season: Int, episode: Int): String? =
@@ -55,9 +57,10 @@ class MegaflixLibraryBuilder @Inject constructor(
 
     suspend fun libraryItems(filter: MediaType?): List<MediaItem> = withContext(Dispatchers.IO) {
         val feed = syncManager.feedItems.value
+        val streamMovies = streamCatalog.movies.value
         // Fast path: reuse the cached movie list across the home's genre rows.
         if (filter == MediaType.MOVIE) {
-            movieCache?.let { if (movieCacheFeed === feed) return@withContext it }
+            movieCache?.let { if (movieCacheFeed === feed && movieCacheStream === streamMovies) return@withContext it }
         }
         val records = store.all()
 
@@ -74,15 +77,20 @@ class MegaflixLibraryBuilder @Inject constructor(
             }.toMap()
 
         // Refresh the movie-path cache from ALL downloaded movie rows.
-        moviePathCache = feed
+        val drivePaths = feed
             .filter { typeOf(it) == MediaType.MOVIE }
             .mapNotNull { item ->
                 val rec = records[item.id]
                 if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
                     item.tmdbId to toFileUri(rec.localFilePath) else null
             }.toMap()
+        // Stream movies (R2, encrypted) are always ready; a movie also on the drive keeps the drive copy.
+        val feedMovieIds = feed.filter { typeOf(it) == MediaType.MOVIE }.map { it.tmdbId }.toSet()
+        val streamOnly = streamMovies.filter { it.tmdbId > 0 && it.tmdbId !in feedMovieIds }
+        moviePathCache = streamOnly.associate { it.tmdbId to streamUri(it.id) } + drivePaths
 
         val wanted = feed.filter { filter == null || typeOf(it) == filter }
+        val includeStream = filter == null || filter == MediaType.MOVIE
 
         val result = coroutineScope {
             val gate = Semaphore(6)
@@ -91,20 +99,22 @@ class MegaflixLibraryBuilder @Inject constructor(
                 wanted.groupBy { it.tmdbId }.map { (tmdbId, rows) ->
                     async { gate.withPermit { buildShowItem(tmdbId, rows, records) } }
                 }.awaitAll()
-            } else if (filter == MediaType.MOVIE) {
-                wanted.map { item -> async { gate.withPermit { buildMovieItem(item, records[item.id]) } } }.awaitAll()
             } else {
-                // No filter: movies as-is, series grouped by show.
+                // Movies as-is (+ stream movies), series grouped by show when unfiltered.
                 val movies = wanted.filter { typeOf(it) == MediaType.MOVIE }
                     .map { item -> async { gate.withPermit { buildMovieItem(item, records[item.id]) } } }
-                val shows = wanted.filter { typeOf(it) == MediaType.TV }.groupBy { it.tmdbId }
-                    .map { (tmdbId, rows) -> async { gate.withPermit { buildShowItem(tmdbId, rows, records) } } }
-                (movies + shows).awaitAll()
+                val streams = if (includeStream) streamOnly.map { s -> async { gate.withPermit { buildStreamItem(s) } } } else emptyList()
+                val shows = if (filter == null) {
+                    wanted.filter { typeOf(it) == MediaType.TV }.groupBy { it.tmdbId }
+                        .map { (tmdbId, rows) -> async { gate.withPermit { buildShowItem(tmdbId, rows, records) } } }
+                } else emptyList()
+                (movies + streams + shows).awaitAll()
             }
         }
         if (filter == MediaType.MOVIE) {
             movieCache = result
             movieCacheFeed = feed
+            movieCacheStream = streamMovies
         }
         result
     }
@@ -115,15 +125,29 @@ class MegaflixLibraryBuilder @Inject constructor(
     private fun toFileUri(absPath: String): String =
         if (absPath.startsWith("file://") || absPath.contains("://")) absPath else "file://$absPath"
 
+    private fun streamUri(id: String) = "$STREAM_SCHEME$id"
+
+    /** A stream movie looks exactly like a drive movie; only its localUri scheme differs. */
+    private suspend fun buildStreamItem(s: com.arflix.tv.stream.StreamMovieDto): MediaItem =
+        movieMetadata(s.tmdbId, s.title, null).copy(
+            localUri = streamUri(s.id), downloadStatus = DownloadStatus.READY, downloadProgress = 1f
+        )
+
     private suspend fun buildMovieItem(item: FeedItemDto, record: DownloadRecord?): MediaItem {
         val status = record?.status ?: DownloadStatus.COMING_SOON
         val localUri = if (status == DownloadStatus.READY) record?.localFilePath?.let { toFileUri(it) } else null
-        val base = runCatching {
-            val d = tmdbApi.getMovieDetails(item.tmdbId, apiKey)
+        val base = movieMetadata(item.tmdbId, item.title, item.description)
+        return base.copy(localUri = localUri, downloadStatus = status, downloadProgress = record?.progress ?: 0f)
+    }
+
+    /** TMDB art + metadata for a movie, falling back to the feed/stream title when TMDB is unreachable. */
+    private suspend fun movieMetadata(tmdbId: Int, fallbackTitle: String, fallbackOverview: String?): MediaItem =
+        runCatching {
+            val d = tmdbApi.getMovieDetails(tmdbId, apiKey)
             MediaItem(
-                id = item.tmdbId,
-                title = d.title.takeIf { it.isNotBlank() } ?: item.title,
-                overview = d.overview ?: item.description.orEmpty(),
+                id = tmdbId,
+                title = d.title.takeIf { it.isNotBlank() } ?: fallbackTitle,
+                overview = d.overview ?: fallbackOverview.orEmpty(),
                 year = d.releaseDate?.take(4) ?: "",
                 image = d.posterPath?.let { "${Constants.IMAGE_BASE}$it" }
                     ?: d.backdropPath?.let { "${Constants.BACKDROP_BASE}$it" } ?: "",
@@ -134,10 +158,8 @@ class MegaflixLibraryBuilder @Inject constructor(
                 mediaType = MediaType.MOVIE
             )
         }.getOrElse {
-            MediaItem(id = item.tmdbId, title = item.title, overview = item.description.orEmpty(), mediaType = MediaType.MOVIE)
+            MediaItem(id = tmdbId, title = fallbackTitle, overview = fallbackOverview.orEmpty(), mediaType = MediaType.MOVIE)
         }
-        return base.copy(localUri = localUri, downloadStatus = status, downloadProgress = record?.progress ?: 0f)
-    }
 
     private suspend fun buildShowItem(tmdbId: Int, rows: List<FeedItemDto>, records: Map<String, DownloadRecord>): MediaItem {
         val statuses = rows.map { records[it.id]?.status ?: DownloadStatus.COMING_SOON }
@@ -167,5 +189,10 @@ class MegaflixLibraryBuilder @Inject constructor(
         }
         // A show has no single localUri — episode files resolve via cachedEpisodePath at play time.
         return base.copy(localUri = null, downloadStatus = showStatus, downloadProgress = 0f)
+    }
+
+    companion object {
+        /** localUri scheme of stream movies; the player resolves it through StreamSession. */
+        const val STREAM_SCHEME = "adikstream://"
     }
 }

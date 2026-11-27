@@ -4,6 +4,8 @@ import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.api.TmdbMovieDetails
 import com.arflix.tv.data.model.DownloadStatus
 import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.stream.StreamCatalog
+import com.arflix.tv.stream.StreamMovieDto
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.every
@@ -16,6 +18,73 @@ class MegaflixLibraryBuilderTest {
     private val sync = mockk<MegaflixSyncManager>()
     private val store = mockk<DownloadStateStore>()
     private val tmdb = mockk<TmdbApi>()
+    private val streamMovies = MutableStateFlow<List<StreamMovieDto>>(emptyList())
+    private val stream = mockk<StreamCatalog>().also { every { it.movies } returns streamMovies }
+
+    private fun MegaflixLibraryBuilder(sync: MegaflixSyncManager, store: DownloadStateStore, tmdb: TmdbApi) =
+        com.arflix.tv.megaflix.MegaflixLibraryBuilder(sync, store, tmdb, stream)
+
+    private val demon = StreamMovieDto(id = "demon_slayer_infinity_castle_2025", tmdbId = 1311031,
+        title = "Demon Slayer: Infinity Castle", plaintextSize = 2_400_000_000)
+
+    @Test
+    fun streamMovieIsANormalReadyEntryWithAStreamUri() = runTest {
+        val feed = listOf(FeedItemDto(id = "a", type = "movie", tmdbId = 10378, title = "Big Buck Bunny", link = "magnet:?x", path = "bbb.mkv"))
+        every { sync.feedItems } returns MutableStateFlow(feed)
+        coEvery { store.all() } returns mapOf("a" to DownloadRecord("a", DownloadStatus.READY, "/drive/bbb.mkv", 1f, null))
+        coEvery { tmdb.getMovieDetails(10378, any(), any(), any()) } returns TmdbMovieDetails(id = 10378, title = "Big Buck Bunny")
+        coEvery { tmdb.getMovieDetails(1311031, any(), any(), any()) } returns
+            TmdbMovieDetails(id = 1311031, title = "Demon Slayer: Kimetsu no Yaiba Infinity Castle")
+        streamMovies.value = listOf(demon)
+
+        val items = MegaflixLibraryBuilder(sync, store, tmdb).libraryItems(MediaType.MOVIE)
+
+        assertThat(items.map { it.id }).containsExactly(10378, 1311031)
+        val ds = items.single { it.id == 1311031 }
+        assertThat(ds.title).isEqualTo("Demon Slayer: Kimetsu no Yaiba Infinity Castle")
+        assertThat(ds.localUri).isEqualTo("adikstream://demon_slayer_infinity_castle_2025")
+        assertThat(ds.downloadStatus).isEqualTo(DownloadStatus.READY)
+    }
+
+    @Test
+    fun streamMovieResolvesThroughCachedMoviePath() = runTest {
+        every { sync.feedItems } returns MutableStateFlow(emptyList())
+        coEvery { store.all() } returns emptyMap()
+        coEvery { tmdb.getMovieDetails(any(), any(), any(), any()) } throws RuntimeException("offline")
+        streamMovies.value = listOf(demon)
+
+        val builder = MegaflixLibraryBuilder(sync, store, tmdb)
+        val items = builder.libraryItems(null)
+
+        assertThat(items.single().title).isEqualTo("Demon Slayer: Infinity Castle") // TMDB down → stream title
+        assertThat(builder.cachedMoviePath(1311031)).isEqualTo("adikstream://demon_slayer_infinity_castle_2025")
+    }
+
+    @Test
+    fun movieCacheRebuildsWhenTheStreamListChanges() = runTest {
+        every { sync.feedItems } returns MutableStateFlow(emptyList())
+        coEvery { store.all() } returns emptyMap()
+        coEvery { tmdb.getMovieDetails(any(), any(), any(), any()) } throws RuntimeException("offline")
+        val builder = MegaflixLibraryBuilder(sync, store, tmdb)
+
+        assertThat(builder.libraryItems(MediaType.MOVIE)).isEmpty()
+        streamMovies.value = listOf(demon)
+        assertThat(builder.libraryItems(MediaType.MOVIE)).hasSize(1)
+    }
+
+    @Test
+    fun streamMovieAlreadyOnTheDriveIsNotListedTwice() = runTest {
+        val feed = listOf(FeedItemDto(id = "ds", type = "movie", tmdbId = 1311031, title = "DS", link = "magnet:?x", path = "ds.mkv"))
+        every { sync.feedItems } returns MutableStateFlow(feed)
+        coEvery { store.all() } returns mapOf("ds" to DownloadRecord("ds", DownloadStatus.READY, "/drive/ds.mkv", 1f, null))
+        coEvery { tmdb.getMovieDetails(any(), any(), any(), any()) } throws RuntimeException("offline")
+        streamMovies.value = listOf(demon)
+
+        val items = MegaflixLibraryBuilder(sync, store, tmdb).libraryItems(MediaType.MOVIE)
+
+        assertThat(items).hasSize(1)
+        assertThat(items.single().localUri).isEqualTo("file:///drive/ds.mkv") // the drive copy wins
+    }
 
     @Test
     fun readyItemGetsLocalUriAndReadyStatus() = runTest {
