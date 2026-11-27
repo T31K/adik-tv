@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -275,13 +278,18 @@ fun VlcPlayerScreen(
             ControlsOverlay(state = state, pendingSeekMs = pendingSeekMs, focus = focus, buttons = buttons)
         }
 
-        if (menuOpen) {
+        // Audio & Subtitles panel slides in from the right edge (and back out on close).
+        AnimatedVisibility(
+            visible = menuOpen,
+            enter = slideInHorizontally(animationSpec = tween(260)) { it } + fadeIn(tween(200)),
+            exit = slideOutHorizontally(animationSpec = tween(220)) { it } + fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
             TrackMenu(
                 state = state,
                 onSelectAudio = { viewModel.selectAudioTrack(it) },
                 onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
-                onClose = { menuOpen = false },
-                modifier = Modifier.align(Alignment.CenterEnd)
+                onClose = { menuOpen = false }
             )
         }
     }
@@ -485,7 +493,7 @@ private fun TrackMenu(
             items(state.audioTracks, key = { "a${it.id}" }) { track ->
                 val isFirst = track == state.audioTracks.first()
                 TrackRow(
-                    label = track.name,
+                    label = track.label,
                     selected = track.id == state.selectedAudioId,
                     onClick = { onSelectAudio(track.id) },
                     modifier = if (isFirst) Modifier.focusRequester(firstFocus) else Modifier
@@ -503,7 +511,7 @@ private fun TrackMenu(
             }
             items(state.subtitleTracks, key = { "s${it.id}" }) { track ->
                 TrackRow(
-                    label = track.name,
+                    label = track.label,
                     selected = track.id == state.selectedSubtitleId,
                     onClick = { onSelectSubtitle(track.id) }
                 )

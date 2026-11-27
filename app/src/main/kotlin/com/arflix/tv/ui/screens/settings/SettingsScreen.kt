@@ -232,7 +232,9 @@ val TMDB_LANGUAGES = listOf(
     "vi-VN" to "Vietnamese"
 )
 
-private val SECTIONS = listOf("accounts", "downloads", "subtitles", "language", "appearance", "profiles")
+// "downloads" tab hidden while movies stream from R2 (2026-11-27, owner: keep Settings lean).
+// Its code below is kept; add "downloads" back after "accounts" to restore it.
+private val SECTIONS = listOf("accounts", /* "downloads", */ "subtitles", "language", "appearance", "profiles")
 
 private enum class Zone { SIDEBAR, SECTION, CONTENT }
 

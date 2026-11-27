@@ -39,7 +39,8 @@ import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 import javax.inject.Inject
 
-data class VlcTrack(val id: Int, val name: String)
+/** [name] is libVLC's raw track name (used for language matching); [label] is what the menu shows. */
+data class VlcTrack(val id: Int, val name: String, val label: String = name)
 
 data class VlcPlayerUiState(
     val title: String = "",
@@ -233,13 +234,16 @@ class VlcPlayerViewModel @Inject constructor(
         }
     }
 
+    private fun withLabels(tracks: List<VlcTrack>): List<VlcTrack> =
+        tracks.zip(TrackNames.labels(tracks.map { it.name })) { t, label -> t.copy(label = label) }
+
     private fun refreshTracks() {
-        val audio = player.audioTracks.orEmpty()
+        val audio = withLabels(player.audioTracks.orEmpty()
             .filter { it.id >= 0 }
-            .map { VlcTrack(it.id, it.name ?: "Track ${it.id}") }
-        val subs = player.spuTracks.orEmpty()
+            .map { VlcTrack(it.id, it.name ?: "Track ${it.id}") })
+        val subs = withLabels(player.spuTracks.orEmpty()
             .filter { it.id >= 0 }
-            .map { VlcTrack(it.id, it.name ?: "Subtitle ${it.id}") }
+            .map { VlcTrack(it.id, it.name ?: "Subtitle ${it.id}") })
         if (!subtitleDefaultApplied && !userPickedSubtitle && _uiState.value.isPlaying) {
             subtitleDefaultApplied = true
             if (!autoSubtitles) {
