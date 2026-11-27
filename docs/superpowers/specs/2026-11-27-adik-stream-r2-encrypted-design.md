@@ -68,7 +68,8 @@ own disc rip of *Demon Slayer: Infinity Castle* (2.3 GB, HEVC Main10 1080p, AAC 
   ```
   The nonce is computed, not stored. Chunk offsets are computable, so any byte range maps to a set of
   chunks that can be fetched with one HTTP Range request.
-- **Object key in R2:** `v/<random 128-bit hex>`. No title, extension or size hints in the name.
+- **Object key in R2:** `v/<movie_uuid as 32 hex>`. The file is named after its catalog entry's random UUID
+  (owner's call, 2026-11-27), and the server refuses a registration where they differ. No title, extension or size hints in the name.
   Bucket: `adik-stream` (new, private, no public access, no custom domain).
 - The header reveals the plaintext size, which is acceptable. Titles and metadata never go to R2.
 
