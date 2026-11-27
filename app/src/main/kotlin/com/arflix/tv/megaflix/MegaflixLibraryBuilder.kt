@@ -84,12 +84,14 @@ class MegaflixLibraryBuilder @Inject constructor(
                 if (rec?.status == DownloadStatus.READY && rec.localFilePath != null)
                     item.tmdbId to toFileUri(rec.localFilePath) else null
             }.toMap()
-        // Stream movies (R2, encrypted) are always ready; a movie also on the drive keeps the drive copy.
-        val feedMovieIds = feed.filter { typeOf(it) == MediaType.MOVIE }.map { it.tmdbId }.toSet()
-        val streamOnly = streamMovies.filter { it.tmdbId > 0 && it.tmdbId !in feedMovieIds }
+        // Stream movies (R2, encrypted) are always ready. A movie already on the drive keeps the drive
+        // copy; a feed movie that isn't downloaded yet is replaced by its stream copy.
+        val streamOnly = streamMovies.filter { it.tmdbId > 0 && it.tmdbId !in drivePaths.keys }
+        val streamIds = streamOnly.map { it.tmdbId }.toSet()
         moviePathCache = streamOnly.associate { it.tmdbId to streamUri(it.id) } + drivePaths
 
         val wanted = feed.filter { filter == null || typeOf(it) == filter }
+            .filterNot { typeOf(it) == MediaType.MOVIE && it.tmdbId in streamIds }
         val includeStream = filter == null || filter == MediaType.MOVIE
 
         val result = coroutineScope {

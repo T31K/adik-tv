@@ -102,6 +102,46 @@ class DecryptingProxyTest {
     }
 
     @Test
+    fun failedUrlRefreshClosesTheConnectionWithoutCrashing() {
+        val crashes = mutableListOf<Throwable>()
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> synchronized(crashes) { crashes += e } }
+        try {
+            val expired = CipherSource { _, _ -> throw UrlExpired() }
+            val url = start(expired) { throw RuntimeException("HTTP 502 from /play") }
+            val (_, body) = get(url, "bytes=0-99")
+            Thread.sleep(300)
+            assertThat(body).isEmpty()
+            assertThat(synchronized(crashes) { crashes.toList() }).isEmpty()
+            assertThat(proxy!!.failed).isTrue()
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previous)
+        }
+    }
+
+    @Test
+    fun transientNetworkErrorsAreRetried() {
+        var calls = 0
+        val flaky = CipherSource { off, len ->
+            if (calls++ < 2) throw IOException("wifi blip")
+            blob.copyOfRange(off.toInt(), off.toInt() + len)
+        }
+        val (c, body) = get(start(flaky), "bytes=0-99")
+        assertThat(c.responseCode).isEqualTo(206)
+        assertThat(body).isEqualTo(plain.copyOfRange(0, 100))
+        assertThat(proxy!!.failed).isFalse()
+    }
+
+    @Test
+    fun corruptedChunkMarksTheProxyFailed() {
+        val corrupt = CipherSource { off, len ->
+            blob.copyOfRange(off.toInt(), off.toInt() + len).also { it[20] = (it[20].toInt() xor 1).toByte() }
+        }
+        get(start(corrupt), "bytes=0-99")
+        assertThat(proxy!!.failed).isTrue()
+    }
+
+    @Test
     fun expiredUrlIsRefreshedOnce() {
         var calls = 0
         var refreshed = 0

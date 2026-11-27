@@ -43,6 +43,13 @@ class DecryptingProxy(
     private var server: ServerSocket? = null
     @Volatile private var stopped = false
 
+    /**
+     * True once a chunk could not be delivered (failed verification, network down, URL refresh failed).
+     * The player checks this so a cut stream shows an error instead of looking like the end of the movie.
+     */
+    @Volatile var failed = false
+        private set
+
     fun start(): String {
         val s = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
         server = s
@@ -81,8 +88,15 @@ class DecryptingProxy(
                 if (parts.getOrNull(1) != "/$secret/movie") return writeHead(out, "403 Forbidden", emptyMap())
                 if (method != "GET" && method != "HEAD") return writeHead(out, "405 Method Not Allowed", emptyMap())
                 serve(out, method == "HEAD", range)
+            } catch (e: StreamBroken) {
+                failed = true
+                warn("stream broken: ${e.message}")
             } catch (e: IOException) {
                 // client closed (VLC seeks by dropping connections) — nothing to do
+            } catch (e: Exception) {
+                // never let a proxy thread take the app down
+                failed = true
+                warn("proxy error: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }
@@ -118,7 +132,7 @@ class DecryptingProxy(
         if (headOnly) return
 
         for (i in AdikEncFormat.chunksFor(header, start, end)) {
-            val plain = plainChunk(i) ?: return // failed verification twice → cut the connection
+            val plain = plainChunk(i) ?: throw StreamBroken("chunk $i failed verification twice")
             val chunkStart = i.toLong() * header.chunkSize
             val from = (maxOf(start, chunkStart) - chunkStart).toInt()
             val to = (minOf(end, chunkStart + plain.size - 1) - chunkStart).toInt()
@@ -137,21 +151,39 @@ class DecryptingProxy(
                 synchronized(cache) { cache[i] = p }
                 return p
             } catch (e: AEADBadTagException) {
-                Log.w(TAG, "chunk $i failed verification (attempt ${attempt + 1})")
+                warn("chunk $i failed verification (attempt ${attempt + 1})")
             }
         }
         return null
     }
 
+    /**
+     * Ciphertext of chunk i. Transient network errors are retried (3 tries, short backoff); an expired
+     * URL is refreshed once. Anything that still fails becomes [StreamBroken].
+     */
     private fun fetch(i: Int): ByteArray {
         val off = AdikEncFormat.chunkOffset(header, i)
         val len = AdikEncFormat.chunkCipherLen(header, i)
-        return try {
-            source.read(off, len)
-        } catch (e: UrlExpired) {
-            synchronized(this) { source = onExpired() }
-            source.read(off, len)
+        var refreshed = false
+        var lastError: Exception? = null
+        for (attempt in 0 until FETCH_TRIES) {
+            try {
+                return source.read(off, len)
+            } catch (e: UrlExpired) {
+                if (refreshed) throw StreamBroken("URL still expired after refresh")
+                refreshed = true
+                try {
+                    synchronized(this) { source = onExpired() }
+                } catch (r: Exception) {
+                    throw StreamBroken("URL refresh failed: ${r.javaClass.simpleName}")
+                }
+            } catch (e: IOException) {
+                lastError = e
+                if (stopped) break
+                Thread.sleep(BACKOFF_MS * (attempt + 1))
+            }
         }
+        throw StreamBroken("chunk $i unreachable: ${lastError?.javaClass?.simpleName}")
     }
 
     private fun prefetch(from: Int) {
@@ -160,6 +192,11 @@ class DecryptingProxy(
             if (synchronized(cache) { cache.containsKey(i) }) continue
             runCatching { prefetcher.execute { if (!stopped) runCatching { plainChunk(i) } } }
         }
+    }
+
+    /** Logging must never throw from a proxy thread (e.g. android.util.Log is absent on the JVM). */
+    private fun warn(msg: String) {
+        runCatching { Log.w(TAG, msg) }
     }
 
     private fun writeHead(out: OutputStream, status: String, headers: Map<String, String>) {
@@ -186,5 +223,10 @@ class DecryptingProxy(
         const val TAG = "AdikStream"
         const val CACHE_CHUNKS = 16
         const val READ_AHEAD = 6
+        const val FETCH_TRIES = 3
+        const val BACKOFF_MS = 300L
     }
 }
+
+/** A chunk could not be delivered; the connection is cut and [DecryptingProxy.failed] is set. */
+class StreamBroken(message: String) : IOException(message)

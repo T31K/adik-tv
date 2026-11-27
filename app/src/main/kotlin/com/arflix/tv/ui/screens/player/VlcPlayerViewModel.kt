@@ -11,6 +11,7 @@ import com.arflix.tv.data.repository.PlaybackProgressStore
 import com.arflix.tv.megaflix.MegaflixLibraryBuilder
 import com.arflix.tv.player.PlaybackState
 import com.arflix.tv.stream.DecryptingProxy
+import com.arflix.tv.stream.StreamEnd
 import com.arflix.tv.stream.StreamSession
 import com.arflix.tv.stream.StreamUris
 import com.arflix.tv.util.PlayerPrefs
@@ -199,6 +200,13 @@ class VlcPlayerViewModel @Inject constructor(
 
     private fun onEndReached() {
         val duration = _uiState.value.durationMs
+        val proxy = streamProxy
+        if (proxy != null && !StreamEnd.isRealEnd(proxy.failed, _uiState.value.positionMs, duration)) {
+            // The stream was cut (network, expired link, bad chunk) — keep the resume point, show an error.
+            saveProgressAsync()
+            _uiState.update { it.copy(isPlaying = false, isLoading = false, error = "The stream was interrupted. Press Back and play again to resume.") }
+            return
+        }
         if (duration > 0L) saveProgressAsync(positionOverride = duration)
         val next = nextEpisode()
         if (next != null) {

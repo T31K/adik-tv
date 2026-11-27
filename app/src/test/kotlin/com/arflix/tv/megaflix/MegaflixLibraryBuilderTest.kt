@@ -73,6 +73,23 @@ class MegaflixLibraryBuilderTest {
     }
 
     @Test
+    fun streamCopyReplacesAFeedMovieThatIsNotDownloadedYet() = runTest {
+        val feed = listOf(FeedItemDto(id = "ds", type = "movie", tmdbId = 1311031, title = "DS", link = "magnet:?x", path = "ds.mkv"))
+        every { sync.feedItems } returns MutableStateFlow(feed)
+        coEvery { store.all() } returns mapOf("ds" to DownloadRecord("ds", DownloadStatus.COMING_SOON, null, 0f, null))
+        coEvery { tmdb.getMovieDetails(any(), any(), any(), any()) } throws RuntimeException("offline")
+        streamMovies.value = listOf(demon)
+
+        val builder = MegaflixLibraryBuilder(sync, store, tmdb)
+        val items = builder.libraryItems(MediaType.MOVIE)
+
+        assertThat(items).hasSize(1)
+        assertThat(items.single().localUri).isEqualTo("adikstream://demon_slayer_infinity_castle_2025")
+        assertThat(items.single().downloadStatus).isEqualTo(DownloadStatus.READY)
+        assertThat(builder.cachedMoviePath(1311031)).isEqualTo("adikstream://demon_slayer_infinity_castle_2025")
+    }
+
+    @Test
     fun streamMovieAlreadyOnTheDriveIsNotListedTwice() = runTest {
         val feed = listOf(FeedItemDto(id = "ds", type = "movie", tmdbId = 1311031, title = "DS", link = "magnet:?x", path = "ds.mkv"))
         every { sync.feedItems } returns MutableStateFlow(feed)
