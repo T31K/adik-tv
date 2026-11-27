@@ -10,6 +10,9 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.PlaybackProgressStore
 import com.arflix.tv.megaflix.MegaflixLibraryBuilder
 import com.arflix.tv.player.PlaybackState
+import com.arflix.tv.stream.DecryptingProxy
+import com.arflix.tv.stream.StreamSession
+import com.arflix.tv.stream.StreamUris
 import com.arflix.tv.util.PlayerPrefs
 import com.arflix.tv.util.PlayerPrefsValues
 import kotlinx.coroutines.runBlocking
@@ -66,8 +69,13 @@ class VlcPlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val progressStore: PlaybackProgressStore,
     private val libraryBuilder: MegaflixLibraryBuilder,
-    private val playbackState: PlaybackState
+    private val playbackState: PlaybackState,
+    private val streamSession: StreamSession
 ) : ViewModel() {
+
+    // Stream movies (adikstream://): the decrypting proxy for this player session and its URL.
+    private var streamProxy: DecryptingProxy? = null
+    private var streamProxyUrl: String? = null
 
     private val showTitle: String = savedStateHandle.get<String>(ARG_TITLE).orEmpty()
     private val tmdbId: Int = savedStateHandle.get<Int>(ARG_TMDB_ID) ?: 0
@@ -126,7 +134,26 @@ class VlcPlayerViewModel @Inject constructor(
 
     private fun startPlayback(fromMs: Long, hardware: Boolean) {
         if (released) return
-        val mediaUri = toVlcUri(uri)
+        val streamId = StreamUris.idOf(uri)
+        if (streamId != null && streamProxyUrl == null) {
+            // Stream movie: open the encrypted R2 stream through the localhost proxy, then play that.
+            _uiState.update { it.copy(isLoading = true, error = null, finished = false) }
+            viewModelScope.launch {
+                val proxy = runCatching { streamSession.open(streamId) }
+                    .onFailure { Log.w(TAG, "stream open failed: ${it.javaClass.simpleName}: ${it.message}") }
+                    .getOrNull()
+                if (proxy == null) {
+                    _uiState.update { it.copy(isLoading = false, error = "Streaming isn't available right now.") }
+                    return@launch
+                }
+                if (released) { proxy.stop(); return@launch }
+                streamProxy = proxy
+                streamProxyUrl = withContext(Dispatchers.IO) { proxy.start() }
+                startPlayback(fromMs, hardware)
+            }
+            return
+        }
+        val mediaUri = if (streamId != null) Uri.parse(streamProxyUrl) else toVlcUri(uri)
         if (mediaUri == null) {
             _uiState.update { it.copy(isLoading = false, error = "This file is not on the drive.") }
             return
@@ -135,6 +162,7 @@ class VlcPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null, finished = false) }
         val media = Media(libVlc, mediaUri)
         media.setHWDecoderEnabled(hardware, false)
+        if (streamId != null) media.addOption(":network-caching=3000")
         if (fromMs > 0L) media.addOption(":start-time=${fromMs / 1000.0}")
         player.setMedia(media)
         media.release()
@@ -310,6 +338,9 @@ class VlcPlayerViewModel @Inject constructor(
         season = nextSeason
         episode = nextEpisode
         uri = nextUri
+        streamProxy?.stop()
+        streamProxy = null
+        streamProxyUrl = null
         startPositionMs = -1L
         softwareRetryDone = false
         _uiState.value = VlcPlayerUiState(title = showTitle, subtitle = episodeLabel())
@@ -377,6 +408,8 @@ class VlcPlayerViewModel @Inject constructor(
             player.release()
             libVlc.release()
         }.onFailure { Log.w(TAG, "releasing VLC failed", it) }
+        streamProxy?.stop() // zeroes the movie key and drops cached plaintext
+        streamProxy = null
         attachedLayout = null
         playbackState.setPlaying(false)
         if (finalSnapshot != null) {
